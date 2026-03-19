@@ -1,7 +1,7 @@
 # ==========================================
 # システム名：学会タイマーたけださん
-# バージョン：v6.0 Official Release
-# 修正：使い方の説明文を指定通りに固定
+# バージョン：v6.1 Final Stable Edition
+# 修正：クレジットエリアにシステム名とバージョンを追加
 # 方式：クリック音(Web Audio合成) / ベル音(GitHub mp3)
 # Created by Takeda Healthcare Foundation
 # 2026/3/19  
@@ -57,7 +57,7 @@ js_code = f"""
     .btn {{ border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 150px; transition: 0.1s; outline: none; }}
     .btn:active {{ transform: scale(0.92); filter: brightness(0.9); }}
     
-    #footer-credit {{ margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; }}
+    #footer-credit {{ margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; line-height: 1.6; }}
 
     #help-modal {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: none; z-index: 9999; justify-content: center; align-items: center; }}
     #help-content {{ background: #fff; color: #333; padding: 30px; border-radius: 20px; max-width: 650px; width: 90%; position: relative; }}
@@ -87,6 +87,7 @@ js_code = f"""
         <button class="btn" style="background-color: #eee;" onclick="toggleHelp(true)">❓ 使い方</button>
     </div>
     <div id="footer-credit">
+        <div>学会タイマーたけださん v6.1</div>
         <div>&copy; 2026 <b>Takeda Healthcare Foundation</b>. All Rights Reserved.</div>
     </div>
 </div>
@@ -156,22 +157,26 @@ js_code = f"""
         const totalSec = Math.floor(elapsed / 1000);
         let displaySec = 0;
         const container = document.getElementById('timer-container'), status = document.getElementById('status'), displayEl = document.getElementById('display');
+        const barEmpty = document.getElementById('bar-empty'), barBlue = document.getElementById('bar-blue'), barYellow = document.getElementById('bar-yellow'), barRed = document.getElementById('bar-red');
+        
         const minPct = 100 / (b3 / 60);
         document.getElementById('progress-marks').style.background = `repeating-linear-gradient(to right, transparent 0, transparent calc(${{minPct}}% - 1px), rgba(0,0,0,0.1) calc(${{minPct}}% - 1px), rgba(0,0,0,0.1) ${{minPct}}%)`;
 
         if (totalSec < b2) {{
             container.style.backgroundColor = "#007BFF"; status.innerText = isCountdown ? "残り時間" : "発表時間"; displaySec = isCountdown ? (b2 - totalSec) : totalSec;
-            document.getElementById('bar-empty').style.width = (totalSec / b3 * 100) + "%";
-            document.getElementById('bar-blue').style.width = ((b2 - totalSec) / b3 * 100) + "%";
-            document.getElementById('bar-yellow').style.width = ((b3 - b2) / b3 * 100) + "%";
+            barEmpty.style.width = (totalSec / b3 * 100) + "%";
+            barBlue.style.width = ((b2 - totalSec) / b3 * 100) + "%";
+            barYellow.style.width = ((b3 - b2) / b3 * 100) + "%";
+            barRed.style.width = "0%";
         }} else if (totalSec < b3) {{
             container.style.backgroundColor = "#D4A017"; status.innerText = "質疑応答"; displaySec = isCountdown ? (totalSec - b2) : totalSec;
-            document.getElementById('bar-empty').style.width = (totalSec / b3 * 100) + "%";
-            document.getElementById('bar-blue').style.width = "0%";
-            document.getElementById('bar-yellow').style.width = ((b3 - totalSec) / b3 * 100) + "%";
+            barEmpty.style.width = (totalSec / b3 * 100) + "%";
+            barBlue.style.width = "0%";
+            barYellow.style.width = ((b3 - totalSec) / b3 * 100) + "%";
+            barRed.style.width = "0%";
         }} else {{
             container.style.backgroundColor = "#A52A2A"; status.innerText = "終了時間"; displaySec = isCountdown ? (totalSec - b2) : totalSec;
-            document.getElementById('bar-red').style.width = "100%";
+            barRed.style.width = "100%";
         }}
         const mm = String(Math.floor(displaySec / 60)).padStart(2, '0'), ss = String(displaySec % 60).padStart(2, '0');
         displayEl.innerHTML = mm + '<span class="colon">:</span>' + ss;
