@@ -1,42 +1,69 @@
 # ==========================================
 # システム名：学会タイマーたけださん
-# バージョン：v7.3 Debugged Edition
-# 修正：CSS内の波括弧による NameError を修正
+# バージョン：v7.4 Layout Final Fix
+# 修正：CSSの適用漏れによる表示崩れを修正
 # ==========================================
 
 import streamlit as st
 
 st.set_page_config(page_title="学会タイマーたけださん", layout="wide", initial_sidebar_state="collapsed")
 
-# 1. 共通CSSスタイルの定義（ここは変数展開しないので普通の文字列）
-common_style = """
-<style>
+# すべてのCSSを一箇所に集約（f-stringを使わないことで波括弧エラーを完全に防ぐ）
+st.markdown("""
+    <style>
+    /* 全体レイアウト */
     .block-container {padding-top: 0.5rem; padding-left: 1rem; padding-right: 1rem;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
+    header, footer {visibility: hidden;}
+    
+    #main-wrapper { 
+        display: flex; flex-direction: column; align-items: center; 
+        font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; 
+        width: 100%; background: white; padding: 0 10px; box-sizing: border-box; 
+    }
+
+    /* 入力エリア */
     input[type="number"] { font-size: 2.2rem !important; font-weight: 700 !important; text-align: center !important; }
     .label-text { font-size: 1.1rem; font-weight: bold; color: #333; text-align: center; }
     div[data-testid="stNumberInput"] { max-width: 130px; margin: 0 auto; }
+    
+    /* テスト・音量エリア */
     .test-area { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 5px; border-left: 1px solid #eee; padding-left: 10px; }
     .test-btn { background: #f8f9fa; border: 1px solid #ddd; border-radius: 5px; padding: 2px 8px; font-size: 0.75rem; cursor: pointer; width: 75px; transition: 0.2s; }
     .test-btn:hover { background: #e2e6ea; }
     .vol-container { display: flex; flex-direction: column; align-items: center; gap: 2px; }
     input[type=range] { width: 80px; cursor: pointer; }
     #vol-label { font-size: 0.7rem; color: #666; font-weight: bold; }
-    
-    #main-wrapper { display: flex; flex-direction: column; align-items: center; font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; width: 100%; background: white; padding: 0 30px; box-sizing: border-box; }
+
+    /* タイマー本体 */
+    #timer-container { 
+        width: 100%; height: 52vh; background-color: #007BFF; color: white; 
+        border-radius: 25px; display: flex; flex-direction: column; 
+        justify-content: center; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,0.15); 
+        padding: 1vh 0; margin-top: 5px;
+    }
+    #status { font-size: 8.5vw; font-weight: 700; line-height: 1.0; margin-bottom: 4vw; opacity: 0.95; letter-spacing: 0.05em; }
+    #display { font-size: 14vw; font-weight: 700; line-height: 0.8; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+    .colon { vertical-align: middle; position: relative; top: -0.05em; }
+
+    /* ボタンエリア */
     .button-area { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }
     .btn { border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 150px; transition: 0.1s; outline: none; }
     .btn:active { transform: scale(0.92); filter: brightness(0.9); }
-    #footer-credit { margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; line-height: 1.6; }
-    #help-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: none; z-index: 9999; justify-content: center; align-items: center; }
-    #help-content { background: #fff; color: #333; padding: 30px; border-radius: 20px; max-width: 650px; width: 90%; position: relative; }
+    
+    /* モーダル（使い方の隠し画面） */
+    #help-modal { 
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0,0,0,0.8); color: white; display: none; 
+        z-index: 9999; justify-content: center; align-items: center; 
+    }
+    #help-content { background: #fff; color: #333; padding: 30px; border-radius: 20px; max-width: 600px; width: 90%; position: relative; }
     .close-btn { position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; color: #aaa; }
-</style>
-"""
-st.markdown(common_style, unsafe_allow_html=True)
+    
+    #footer-credit { margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; }
+    </style>
+    """, unsafe_allow_html=True)
 
-# 2. 設定エリア（Python側）
+# Python設定エリア
 buf1, c1, c2, c3, c_test, buf2 = st.columns([1.5, 1, 1, 1, 1.8, 0.7])
 with c1:
     st.markdown('<div class="label-text">鈴1 (分)</div>', unsafe_allow_html=True)
@@ -65,9 +92,9 @@ with c_test:
     </div>
     """, unsafe_allow_html=True)
 
-# 3. メインJavaScript & HTML（動的な値だけ f-string で埋め込み、他は {{ }} でエスケープ）
 b1_s, b2_s, b3_s = b1_m * 60, b2_m * 60, b3_m * 60
 
+# JavaScript & HTML構造
 js_html_content = f"""
 <script>
     const B1_LIMIT = {b1_s}, B2_LIMIT = {b2_s}, B3_LIMIT = {b3_s};
@@ -202,9 +229,9 @@ js_html_content = f"""
         <div id="progress-highlight" style="position: absolute; top: 2px; left: 10px; right: 10px; height: 35%; background: linear-gradient(to bottom, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 100%); border-radius: 20px; filter: blur(1px); z-index: 3; pointer-events: none;"></div>
     </div>
 
-    <div id="timer-container" style="width: 100%; height: 52vh; background-color: #007BFF; color: white; border-radius: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,0.15); padding-top: 1vh; padding-bottom: 1vh;">
-        <div id="status" style="font-size: 8.5vw; font-weight: 700; line-height: 1.0; margin-bottom: 4vw; opacity: 0.95; letter-spacing: 0.05em;">発表時間</div>
-        <div id="display" style="font-size: 14vw; font-weight: 700; line-height: 0.8; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;">00<span class="colon">:</span>00</div>
+    <div id="timer-container">
+        <div id="status">発表時間</div>
+        <div id="display">00<span class="colon">:</span>00</div>
     </div>
     
     <div class="button-area">
@@ -216,8 +243,9 @@ js_html_content = f"""
         <button class="btn" style="background-color: #343a40; color: white;" onclick="toggleFullscreen()">🔳 全画面</button>
         <button class="btn" style="background-color: #eee;" onclick="toggleHelp(true)">❓ 使い方</button>
     </div>
+    
     <div id="footer-credit">
-        <div>学会タイマーたけださん v7.3</div>
+        <div>学会タイマーたけださん v7.4</div>
         <div>&copy; 2026 <b>Takeda Healthcare Foundation</b>. All Rights Reserved.</div>
     </div>
 </div>
