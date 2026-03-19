@@ -93,7 +93,7 @@ js_code = f"""
     const sounds = {{
          "1": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/refs/heads/main/bell1.mp3"),
          "2": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/refs/heads/main/bell2.mp3"),
-         "3": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/refs/heads/main/bell3.mp3"")
+         "3": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/refs/heads/main/bell3.mp3")
     }};
     Object.values(sounds).forEach(s => {{ s.preload = "auto"; }});
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
