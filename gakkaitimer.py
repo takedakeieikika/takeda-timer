@@ -1,6 +1,7 @@
 # ==========================================
 # システム名：学会タイマーたけださん
-# バージョン：v5.7 Hybrid Sound Edition
+# バージョン：v5.8 Full Restoration Edition
+# 修正：使い方ボタン・クレジットの再実装
 # 方式：クリック音(Web Audio合成) / ベル音(GitHub mp3)
 # Created by Takeda Healthcare Foundation
 # 2026/3/19  
@@ -25,13 +26,13 @@ st.markdown("""
 buf1, c1, c2, c3, buf2 = st.columns([1.5, 1, 1, 1, 2.5])
 with c1:
     st.markdown('<div class="label-text">鈴1 (分)</div>', unsafe_allow_html=True)
-    b1_m = st.number_input("b1", value=6, step=1, label_visibility="collapsed")
+    b1_m = st.number_input("b1", value=6, step=1, key="b1", label_visibility="collapsed")
 with c2:
     st.markdown('<div class="label-text">鈴2 (分)</div>', unsafe_allow_html=True)
-    b2_m = st.number_input("b2", value=7, step=1, label_visibility="collapsed")
+    b2_m = st.number_input("b2", value=7, step=1, key="b2", label_visibility="collapsed")
 with c3:
     st.markdown('<div class="label-text">鈴3 (分)</div>', unsafe_allow_html=True)
-    b3_m = st.number_input("b3", value=10, step=1, label_visibility="collapsed")
+    b3_m = st.number_input("b3", value=10, step=1, key="b3", label_visibility="collapsed")
 
 b1_s, b2_s, b3_s = b1_m * 60, b2_m * 60, b3_m * 60
 
@@ -46,13 +47,21 @@ js_code = f"""
     #bar-red {{ position: absolute; top:0; left:0; height:100%; width:0%; z-index:1; background: linear-gradient(to bottom, #ffcccc 0%, #FF0000 50%, #b30000 100%); transition: width 0.3s; }}
     #progress-marks {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }}
     #progress-highlight {{ position: absolute; top: 2px; left: 10px; right: 10px; height: 35%; background: linear-gradient(to bottom, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 100%); border-radius: 20px; filter: blur(1px); z-index: 3; pointer-events: none; }}
+    
     #timer-container {{ width: 100%; height: 52vh; background-color: #007BFF; color: white; border-radius: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,0.15); padding-top: 1vh; padding-bottom: 1vh; }}
     #status {{ font-size: 9vw; font-weight: 700; line-height: 0.8; margin-bottom: 1.5vw; opacity: 0.95; }}
     #display {{ font-size: 14vw; font-weight: 700; line-height: 0.8; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }}
     .colon {{ vertical-align: middle; position: relative; top: -0.05em; }}
+    
     .button-area {{ margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }}
-    .btn {{ border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 150px; transition: 0.1s; }}
+    .btn {{ border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 150px; transition: 0.1s; outline: none; }}
     .btn:active {{ transform: scale(0.92); filter: brightness(0.9); }}
+    
+    #footer-credit {{ margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; }}
+
+    #help-modal {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: none; z-index: 9999; justify-content: center; align-items: center; }}
+    #help-content {{ background: #fff; color: #333; padding: 30px; border-radius: 20px; max-width: 600px; width: 90%; position: relative; }}
+    .close-btn {{ position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; color: #aaa; }}
 </style>
 
 <div id="main-wrapper" onclick="unlockAudio()">
@@ -75,66 +84,71 @@ js_code = f"""
         <button class="btn" style="background-color: #6C757D; color: white;" onclick="handleAction('mode')">🔽 表示切替</button>
         <button id="mute-btn" class="btn" style="background-color: #E1F5FE; border: 1px solid #007BFF; color: #007BFF;" onclick="handleAction('mute')">🔔 鈴1,2：有効</button>
         <button class="btn" style="background-color: #343a40; color: white;" onclick="toggleFullscreen()">🔳 全画面</button>
+        <button class="btn" style="background-color: #eee;" onclick="toggleHelp(true)">❓ 使い方</button>
+    </div>
+    <div id="footer-credit">
+        <div>&copy; 2026 <b>Takeda Healthcare Foundation</b>. All Rights Reserved.</div>
+    </div>
+</div>
+
+<div id="help-modal">
+    <div id="help-content">
+        <span class="close-btn" onclick="toggleHelp(false)">×</span>
+        <h3 style="color:#007BFF; border-bottom:2px solid #007BFF;">💡 学会タイマーたけださんの使い方</h3>
+        <ul style="font-size:0.9rem; line-height:1.7; color:#444;">
+            <li><b>操作音:</b> ボタンを押すと内部合成音が鳴ります。</li>
+            <li><b>解禁:</b> 起動後、画面のどこかを一度クリックすると音が有効になります。</li>
+            <li><b>全画面:</b> プレゼン投影時にブラウザの枠を隠せます。</li>
+            <li><b>進捗バー:</b> 1分ごとの目盛り付きで直感的に残り時間を把握。</li>
+        </ul>
     </div>
 </div>
 
 <script>
-    let startTime = 0, elapsed = 0, running = false, lastPlayed = -1, isCountdown = false, isMuted = false;
-    let audioCtx = null;
+    let startTime = 0, elapsed = 0, running = false, lastPlayed = -1, isCountdown = false, isMuted = false, audioCtx = null;
     const b1 = {b1_s}, b2 = {b2_s}, b3 = {b3_s};
-    
-    // 【ベル音】GitHubからの外部読み込み
     const bellSounds = {{
         "1": new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell1.mp3"),
         "2": new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell2.mp3"),
         "3": new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell3.mp3")
     }};
 
-    // オーディオ初期化とアンロック
     function unlockAudio() {{
         if (!audioCtx) {{
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            Object.values(bellSounds).forEach(s => {{ 
-                s.play().then(()=>{{s.pause(); s.currentTime=0;}}).catch(e=>{{}}); 
-            }});
+            Object.values(bellSounds).forEach(s => {{ s.play().then(()=>{{s.pause(); s.currentTime=0;}}).catch(e=>{{}}); }});
         }}
         if (audioCtx.state === 'suspended') audioCtx.resume();
     }}
 
-    // 【クリック音】Web Audio APIによる合成（ポッという短い音）
     function synthClick() {{
         if (!audioCtx) return;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+        const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+        osc.type = 'sine'; osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.05);
         gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.05);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.05);
     }}
 
+    function toggleHelp(show) {{ synthClick(); document.getElementById('help-modal').style.display = show ? 'flex' : 'none'; }}
+
     function handleAction(type) {{
-        unlockAudio();
-        synthClick();
+        unlockAudio(); synthClick();
         if (type === 'start' && !running) {{ running = true; startTime = performance.now() - elapsed; requestAnimationFrame(loop); }}
         if (type === 'stop') running = false;
         if (type === 'reset') {{ running = false; elapsed = 0; lastPlayed = -1; updateDisplay(); }}
         if (type === 'mode') {{ isCountdown = !isCountdown; updateDisplay(); }}
         if (type === 'mute') {{ 
-            isMuted = !isMuted; 
-            const mbtn = document.getElementById('mute-btn');
+            isMuted = !isMuted; const mbtn = document.getElementById('mute-btn');
             mbtn.innerHTML = isMuted ? '<span style="color:#ff4b4b;">✕</span> 鈴1,2：消音中' : '🔔 鈴1,2：有効';
             mbtn.style.backgroundColor = isMuted ? "#f5f5f5" : "#E1F5FE";
         }}
     }}
 
     function toggleFullscreen() {{
-        synthClick();
-        let elem = document.getElementById("main-wrapper");
+        synthClick(); let elem = document.getElementById("main-wrapper");
         if (!document.fullscreenElement) elem.requestFullscreen().catch(e => {{}});
         else document.exitFullscreen();
     }}
@@ -160,10 +174,8 @@ js_code = f"""
             container.style.backgroundColor = "#A52A2A"; status.innerText = "終了時間"; displaySec = isCountdown ? (totalSec - b2) : totalSec;
             document.getElementById('bar-red').style.width = "100%";
         }}
-
         const mm = String(Math.floor(displaySec / 60)).padStart(2, '0'), ss = String(displaySec % 60).padStart(2, '0');
         displayEl.innerHTML = mm + '<span class="colon">:</span>' + ss;
-
         if (totalSec !== lastPlayed) {{
             if (totalSec === b1 && !isMuted) bellSounds["1"].play().catch(e=>{{}});
             if (totalSec === b2 && !isMuted) bellSounds["2"].play().catch(e=>{{}});
@@ -176,4 +188,4 @@ js_code = f"""
 </script>
 """
 
-st.components.v1.html(js_code, height=900)
+st.components.v1.html(js_code, height=920)
