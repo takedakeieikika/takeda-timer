@@ -1,212 +1,197 @@
+# ==========================================
+# システム名：学会タイマーたけださん
+# バージョン：v6.1 Final Stable Edition
+# 修正：クレジットエリアにシステム名とバージョンを追加
+# 方式：クリック音(Web Audio合成) / ベル音(GitHub mp3)
+# Created by Takeda Healthcare Foundation
+# 2026/3/19  
+# ==========================================
+
 import streamlit as st
 
 st.set_page_config(page_title="学会タイマーたけださん", layout="wide", initial_sidebar_state="collapsed")
 
+# 1. スタイル設定
 st.markdown("""
     <style>
-    .block-container {padding: 0px;}
-    header, footer {visibility: hidden;}
-    iframe {border: none;}
+    .block-container {padding-top: 0.5rem; padding-left: 1rem; padding-right: 1rem;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    input[type="number"] { font-size: 2.2rem !important; font-weight: 700 !important; text-align: center !important; }
+    .label-text { font-size: 1.1rem; font-weight: bold; color: #333; text-align: center; }
+    div[data-testid="stNumberInput"] { max-width: 130px; margin: 0 auto; }
     </style>
     """, unsafe_allow_html=True)
 
-final_content = """
-<!DOCTYPE html>
-<html>
-<head>
+# 2. 設定エリア（＋/－ボタン付き入力窓）
+buf1, c1, c2, c3, buf2 = st.columns([1.5, 1, 1, 1, 2.5])
+with c1:
+    st.markdown('<div class="label-text">鈴1 (分)</div>', unsafe_allow_html=True)
+    b1_m = st.number_input("b1", value=6, step=1, key="b1", label_visibility="collapsed")
+with c2:
+    st.markdown('<div class="label-text">鈴2 (分)</div>', unsafe_allow_html=True)
+    b2_m = st.number_input("b2", value=7, step=1, key="b2", label_visibility="collapsed")
+with c3:
+    st.markdown('<div class="label-text">鈴3 (分)</div>', unsafe_allow_html=True)
+    b3_m = st.number_input("b3", value=10, step=1, key="b3", label_visibility="collapsed")
+
+b1_s, b2_s, b3_s = b1_m * 60, b2_m * 60, b3_m * 60
+
+# 3. タイマー本体 (JavaScript)
+js_code = f"""
 <style>
-    body { margin: 0; padding: 10px; font-family: 'Hiragino Kaku Gothic ProN', sans-serif; background: white; text-align: center; overflow-x: hidden; }
+    #main-wrapper {{ display: flex; flex-direction: column; align-items: center; font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; width: 100%; background: white; }}
+    #progress-outer-container {{ width: 100%; height: 40px; background: #e0e0e0; border-radius: 20px; margin: 5px 0 10px 0; box-shadow: inset 0 3px 8px rgba(0,0,0,0.2); overflow: hidden; position: relative; display: flex; border: 1px solid #bbb; }}
+    .liquid-segment {{ height: 100%; transition: width 0.1s linear; }}
+    #bar-empty {{ width: 0%; background: transparent; }}
+    #bar-blue {{ background: linear-gradient(to bottom, #4facfe 0%, #007BFF 50%, #0056b3 100%); }}
+    #bar-yellow {{ background: linear-gradient(to bottom, #fff3b0 0%, #FFD700 50%, #b89b00 100%); }}
+    #bar-red {{ position: absolute; top:0; left:0; height:100%; width:0%; z-index:1; background: linear-gradient(to bottom, #ffcccc 0%, #FF0000 50%, #b30000 100%); transition: width 0.3s; }}
+    #progress-marks {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }}
+    #progress-highlight {{ position: absolute; top: 2px; left: 10px; right: 10px; height: 35%; background: linear-gradient(to bottom, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 100%); border-radius: 20px; filter: blur(1px); z-index: 3; pointer-events: none; }}
     
-    /* 設定エリア */
-    .setup-row { display: flex; justify-content: center; align-items: flex-end; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
-    .input-group { display: flex; flex-direction: column; align-items: center; }
-    .label-text { font-size: 0.85rem; font-weight: bold; color: #444; margin-bottom: 4px; }
-    .number-ctrl { display: flex; align-items: center; border: 2px solid #ddd; border-radius: 8px; overflow: hidden; background: #fff; }
-    .num-btn { background: #eee; border: none; width: 30px; height: 38px; font-size: 1.2rem; cursor: pointer; font-weight: bold; }
-    .num-input { width: 45px; height: 38px; border: none; text-align: center; font-size: 1.3rem; font-weight: bold; -moz-appearance: textfield; }
+    #timer-container {{ width: 100%; height: 52vh; background-color: #007BFF; color: white; border-radius: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,0.15); padding-top: 1vh; padding-bottom: 1vh; }}
+    #status {{ font-size: 9vw; font-weight: 700; line-height: 0.8; margin-bottom: 1.5vw; opacity: 0.95; }}
+    #display {{ font-size: 14vw; font-weight: 700; line-height: 0.8; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }}
+    .colon {{ vertical-align: middle; position: relative; top: -0.05em; }}
     
-    /* 液体風プログレスバーのデザイン */
-    #progress-outer { 
-        width: 100%; height: 35px; background: #ebebeb; border-radius: 20px; 
-        overflow: hidden; position: relative; display: flex; 
-        border: 1px solid #ccc; margin: 10px 0; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
-    }
+    .button-area {{ margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }}
+    .btn {{ border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 150px; transition: 0.1s; outline: none; }}
+    .btn:active {{ transform: scale(0.92); filter: brightness(0.9); }}
     
-    .liquid-bar {
-        height: 100%;
-        transition: width 0.3s ease;
-        position: relative;
-        /* 液体のような光沢アニメーション */
-        background-image: linear-gradient(
-            45deg, 
-            rgba(255,255,255,0.15) 25%, 
-            transparent 25%, 
-            transparent 50%, 
-            rgba(255,255,255,0.15) 50%, 
-            rgba(255,255,255,0.15) 75%, 
-            transparent 75%, 
-            transparent
-        );
-        background-size: 40px 40px;
-        animation: move-liquid 2s linear infinite;
-    }
+    #footer-credit {{ margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; line-height: 1.6; }}
 
-    @keyframes move-liquid {
-        from { background-position: 0 0; }
-        to { background-position: 40px 0; }
-    }
-
-    /* 各色のグラデーション（液体感） */
-    #bar-blue { background-color: #007BFF; background-image: linear-gradient(to bottom, #4facfe 0%, #007BFF 100%); }
-    #bar-yellow { background-color: #FFD700; background-image: linear-gradient(to bottom, #fff3b0 0%, #FFD700 100%); }
-    #bar-red { 
-        position: absolute; top:0; left:0; height:100%; z-index:1;
-        background-color: #FF0000; background-image: linear-gradient(to bottom, #ffcccc 0%, #FF0000 100%); 
-    }
-
-    /* タイマー本体 */
-    #timer-box { width: 100%; height: 48vh; background-color: #007BFF; color: white; border-radius: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-    #status { font-size: 6vw; font-weight: bold; margin-bottom: 5px; }
-    #display { font-size: 15vw; font-weight: bold; font-variant-numeric: tabular-nums; }
-
-    .button-area { margin-top: 15px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-    .btn { border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 140px; }
-    
-    #footer-credit { margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; }
+    #help-modal {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: none; z-index: 9999; justify-content: center; align-items: center; }}
+    #help-content {{ background: #fff; color: #333; padding: 30px; border-radius: 20px; max-width: 650px; width: 90%; position: relative; }}
+    .close-btn {{ position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; color: #aaa; }}
 </style>
-</head>
-<body>
 
-<div class="setup-row">
-    <div class="input-group">
-        <span class="label-text">鈴1(分)</span>
-        <div class="number-ctrl">
-            <button class="num-btn" onclick="clickSound(); step('b1', -1)">−</button>
-            <input type="number" id="b1" class="num-input" value="6">
-            <button class="num-btn" onclick="clickSound(); step('b1', 1)">＋</button>
+<div id="main-wrapper" onclick="unlockAudio()">
+    <div id="progress-outer-container">
+        <div id="bar-empty" class="liquid-segment"></div>
+        <div id="bar-blue" class="liquid-segment"></div>
+        <div id="bar-yellow" class="liquid-segment"></div>
+        <div id="bar-red"></div>
+        <div id="progress-marks"></div>
+        <div id="progress-highlight"></div>
+    </div>
+    <div id="timer-container">
+        <div id="status">発表時間</div>
+        <div id="display">00<span class="colon">:</span>00</div>
+    </div>
+    <div class="button-area">
+        <button class="btn" style="background-color: #87CEEB;" onclick="handleAction('start')">▶ START</button>
+        <button class="btn" style="background-color: #FFB6C1;" onclick="handleAction('stop')">|| STOP</button>
+        <button class="btn" style="background-color: #98FB98;" onclick="handleAction('reset')">🔄 RESET</button>
+        <button class="btn" style="background-color: #6C757D; color: white;" onclick="handleAction('mode')">🔽 表示切替</button>
+        <button id="mute-btn" class="btn" style="background-color: #E1F5FE; border: 1px solid #007BFF; color: #007BFF;" onclick="handleAction('mute')">🔔 鈴1,2：有効</button>
+        <button class="btn" style="background-color: #343a40; color: white;" onclick="toggleFullscreen()">🔳 全画面</button>
+        <button class="btn" style="background-color: #eee;" onclick="toggleHelp(true)">❓ 使い方</button>
+    </div>
+    <div id="footer-credit">
+        <div>学会タイマーたけださん v6.1 Final Stable Edition</div>
+        <div>&copy; 2026 <b>Takeda Healthcare Foundation</b>. All Rights Reserved.</div>
+    </div>
+</div>
+
+<div id="help-modal">
+    <div id="help-content">
+        <span class="close-btn" onclick="toggleHelp(false)">×</span>
+        <h3 style="color:#007BFF; border-bottom:2px solid #007BFF; margin-top:0; padding-bottom:5px;">💡 学会タイマーたけださんの使い方</h3>
+        <div style="font-size:0.95rem; line-height:1.8; color:#333; text-align:left;">
+            <p style="margin: 15px 0;">〇発表時間設定：鈴１回（発表終了１分前）、鈴２回（発表終了時間）、鈴３回（質疑終了）の各分数を設定できます。</p>
+            <p style="margin: 15px 0;">〇表示切替：発表経過時間（カウントアップ）と発表残り時間（カウントダウン）の表示を切り替えます。</p>
+            <p style="margin: 15px 0;">〇鈴１，２ミュートボタン：鈴１回と鈴２回を消音できます。</p>
         </div>
     </div>
-    <div class="input-group">
-        <span class="label-text">鈴2(分)</span>
-        <div class="number-ctrl">
-            <button class="num-btn" onclick="clickSound(); step('b2', -1)">−</button>
-            <input type="number" id="b2" class="num-input" value="7">
-            <button class="num-btn" onclick="clickSound(); step('b2', 1)">＋</button>
-        </div>
-    </div>
-    <div class="input-group">
-        <span class="label-text">鈴3(分)</span>
-        <div class="number-ctrl">
-            <button class="num-btn" onclick="clickSound(); step('b3', -1)">−</button>
-            <input type="number" id="b3" class="num-input" value="10">
-            <button class="num-btn" onclick="clickSound(); step('b3', 1)">＋</button>
-        </div>
-    </div>
-    
-    <div style="width:1px; height:40px; background:#eee; margin:0 5px;"></div>
-
-    <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
-        <span id="vol-txt" style="font-size:0.7rem; font-weight:bold; color:#666;">音量: 80%</span>
-        <input type="range" id="vol-range" min="0" max="100" value="80" style="width:100px; cursor:pointer;" oninput="changeVol(this.value)">
-    </div>
-    <div style="display:flex; gap:5px;">
-        <button class="test-btn" style="background:#f8f9fa; border:1px solid #ddd; border-radius:5px; padding:6px 10px; font-size:0.75rem; cursor:pointer;" onclick="playBell(1)">🔔 1回</button>
-        <button class="test-btn" style="background:#f8f9fa; border:1px solid #ddd; border-radius:5px; padding:6px 10px; font-size:0.75rem; cursor:pointer;" onclick="playBell(2)">🔔 2回</button>
-        <button class="test-btn" style="background:#f8f9fa; border:1px solid #ddd; border-radius:5px; padding:6px 10px; font-size:0.75rem; cursor:pointer;" onclick="playBell(3)">🔔 3回</button>
-    </div>
-</div>
-
-<div id="progress-outer">
-    <div id="bar-done" style="width:0%; background:transparent;"></div>
-    <div id="bar-blue" class="liquid-bar" style="width:0%;"></div>
-    <div id="bar-yellow" class="liquid-bar" style="width:0%;"></div>
-    <div id="bar-red" class="liquid-bar" style="width:0%; display:none;"></div>
-    <div id="p-marks" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:2; pointer-events:none;"></div>
-</div>
-
-<div id="timer-box">
-    <div id="status">発表時間</div>
-    <div id="display">00:00</div>
-</div>
-
-<div class="button-area">
-    <button class="btn" style="background-color: #87CEEB;" onclick="clickSound(); act('start')">▶ START</button>
-    <button class="btn" style="background-color: #FFB6C1;" onclick="clickSound(); act('stop')">|| STOP</button>
-    <button class="btn" style="background-color: #98FB98;" onclick="clickSound(); act('reset')">🔄 RESET</button>
-    <button class="btn" style="background-color: #6C757D; color: white;" onclick="clickSound(); act('mode')">🔽 表示切替</button>
-    <button id="mute-btn" class="btn" style="background-color: #E1F5FE; border: 1px solid #007BFF; color: #007BFF;" onclick="clickSound(); act('mute')">🔔 鈴1,2：有効</button>
-</div>
-
-<div id="footer-credit">
-    <div>学会タイマーたけださん v8.2</div>
-    <div>&copy; 2026 <b>Takeda Healthcare Foundation</b>. All Rights Reserved.</div>
 </div>
 
 <script>
-    let vol = 0.8;
-    let start = 0, elapsed = 0, running = false, lastS = -1, isCD = false, muted = false;
-    const clickAudio = new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/click.mp3");
-    const bells = {
-        1: new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell1.mp3"),
-        2: new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell2.mp3"),
-        3: new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell3.mp3")
-    };
+    let startTime = 0, elapsed = 0, running = false, lastPlayed = -1, isCountdown = false, isMuted = false, audioCtx = null;
+    const b1 = {b1_s}, b2 = {b2_s}, b3 = {b3_s};
+    const bellSounds = {{
+        "1": new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell1.mp3"),
+        "2": new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell2.mp3"),
+        "3": new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell3.mp3")
+    }};
 
-    function clickSound() { clickAudio.volume = vol * 0.3; clickAudio.currentTime = 0; clickAudio.play().catch(e=>{}); }
-    function step(id, n) { 
-        const el = document.getElementById(id);
-        el.value = Math.max(0, parseInt(el.value) + n);
-        updateDisplay();
-    }
-    function changeVol(v) { vol = v/100; document.getElementById('vol-txt').innerText = "音量: "+v+"%"; Object.values(bells).forEach(b => b.volume = vol); }
-    function playBell(n) { const b = bells[n]; b.volume = vol; b.currentTime = 0; b.play().catch(e=>{}); }
+    function unlockAudio() {{
+        if (!audioCtx) {{
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            Object.values(bellSounds).forEach(s => {{ s.play().then(()=>{{s.pause(); s.currentTime=0;}}).catch(e=>{{}}); }});
+        }}
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }}
 
-    function act(type) {
-        if(type==='start' && !running) { running=true; start=performance.now()-elapsed; loop(); }
-        if(type==='stop') running=false;
-        if(type==='reset') { running=false; elapsed=0; lastS=-1; updateDisplay(); }
-        if(type==='mode') { isCD=!isCD; updateDisplay(); }
-        if(type==='mute') { muted=!muted; document.getElementById('mute-btn').innerText = muted ? "✕ 鈴1,2：消音" : "🔔 鈴1,2：有効"; }
-    }
+    function synthClick() {{
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+        osc.type = 'sine'; osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.05);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+    }}
 
-    function updateDisplay() {
-        const b1 = parseInt(document.getElementById('b1').value)*60;
-        const b2 = parseInt(document.getElementById('b2').value)*60;
-        const b3 = parseInt(document.getElementById('b3').value)*60;
-        const s = Math.floor(elapsed/1000);
+    function toggleHelp(show) {{ synthClick(); document.getElementById('help-modal').style.display = show ? 'flex' : 'none'; }}
+
+    function handleAction(type) {{
+        unlockAudio(); synthClick();
+        if (type === 'start' && !running) {{ running = true; startTime = performance.now() - elapsed; requestAnimationFrame(loop); }}
+        if (type === 'stop') running = false;
+        if (type === 'reset') {{ running = false; elapsed = 0; lastPlayed = -1; updateDisplay(); }}
+        if (type === 'mode') {{ isCountdown = !isCountdown; updateDisplay(); }}
+        if (type === 'mute') {{ 
+            isMuted = !isMuted; const mbtn = document.getElementById('mute-btn');
+            mbtn.innerHTML = isMuted ? '<span style="color:#ff4b4b;">✕</span> 鈴1,2：消音中' : '🔔 鈴1,2：有効';
+            mbtn.style.backgroundColor = isMuted ? "#f5f5f5" : "#E1F5FE";
+        }}
+    }}
+
+    function toggleFullscreen() {{
+        synthClick(); let elem = document.getElementById("main-wrapper");
+        if (!document.fullscreenElement) elem.requestFullscreen().catch(e => {{}});
+        else document.exitFullscreen();
+    }}
+
+    function updateDisplay() {{
+        const totalSec = Math.floor(elapsed / 1000);
+        let displaySec = 0;
+        const container = document.getElementById('timer-container'), status = document.getElementById('status'), displayEl = document.getElementById('display');
+        const barEmpty = document.getElementById('bar-empty'), barBlue = document.getElementById('bar-blue'), barYellow = document.getElementById('bar-yellow'), barRed = document.getElementById('bar-red');
         
-        const box = document.getElementById('timer-box'), status = document.getElementById('status'), disp = document.getElementById('display');
-        const bd = document.getElementById('bar-done'), bb = document.getElementById('bar-blue'), by = document.getElementById('bar-yellow'), br = document.getElementById('bar-red');
+        const minPct = 100 / (b3 / 60);
+        document.getElementById('progress-marks').style.background = `repeating-linear-gradient(to right, transparent 0, transparent calc(${{minPct}}% - 1px), rgba(0,0,0,0.1) calc(${{minPct}}% - 1px), rgba(0,0,0,0.1) ${{minPct}}%)`;
 
-        const minPct = 100 / (b3/60 || 1);
-        document.getElementById('p-marks').style.background = `repeating-linear-gradient(to right, transparent 0, transparent calc(${minPct}% - 1px), rgba(0,0,0,0.1) calc(${minPct}% - 1px), rgba(0,0,0,0.1) ${minPct}%)`;
-
-        let d = 0;
-        if(s < b2) {
-            box.style.backgroundColor="#007BFF"; status.innerText=isCD?"残り時間":"発表時間"; d=isCD?(b2-s):s;
-            bd.style.width=(s/b3*100)+"%"; bb.style.width=((b2-s)/b3*100)+"%"; by.style.width=((b3-b2)/b3*100)+"%"; br.style.display="none";
-        } else if(s < b3) {
-            box.style.backgroundColor="#D4A017"; status.innerText="質疑応答"; d=isCD?(s-b2):s;
-            bd.style.width=(s/b3*100)+"%"; bb.style.width="0%"; by.style.width=((b3-s)/b3*100)+"%"; br.style.display="none";
-        } else {
-            box.style.backgroundColor="#A52A2A"; status.innerText="終了時間"; d=s-b2;
-            bd.style.width="0%"; bb.style.width="0%"; by.style.width="0%"; br.style.display="block"; br.style.width="100%";
-        }
-        const mm = String(Math.floor(d/60)).padStart(2,'0'), ss = String(d%60).padStart(2,'0');
-        disp.innerText = mm+":"+ss;
-
-        if(s !== lastS) {
-            if(s===b1 && !muted) playBell(1);
-            if(s===b2 && !muted) playBell(2);
-            if(s===b3) playBell(3);
-            lastS = s;
-        }
-    }
-    function loop() { if(running) { elapsed=performance.now()-start; updateDisplay(); requestAnimationFrame(loop); } }
+        if (totalSec < b2) {{
+            container.style.backgroundColor = "#007BFF"; status.innerText = isCountdown ? "残り時間" : "発表時間"; displaySec = isCountdown ? (b2 - totalSec) : totalSec;
+            barEmpty.style.width = (totalSec / b3 * 100) + "%";
+            barBlue.style.width = ((b2 - totalSec) / b3 * 100) + "%";
+            barYellow.style.width = ((b3 - b2) / b3 * 100) + "%";
+            barRed.style.width = "0%";
+        }} else if (totalSec < b3) {{
+            container.style.backgroundColor = "#D4A017"; status.innerText = "質疑応答"; displaySec = isCountdown ? (totalSec - b2) : totalSec;
+            barEmpty.style.width = (totalSec / b3 * 100) + "%";
+            barBlue.style.width = "0%";
+            barYellow.style.width = ((b3 - totalSec) / b3 * 100) + "%";
+            barRed.style.width = "0%";
+        }} else {{
+            container.style.backgroundColor = "#A52A2A"; status.innerText = "終了時間"; displaySec = isCountdown ? (totalSec - b2) : totalSec;
+            barRed.style.width = "100%";
+        }}
+        const mm = String(Math.floor(displaySec / 60)).padStart(2, '0'), ss = String(displaySec % 60).padStart(2, '0');
+        displayEl.innerHTML = mm + '<span class="colon">:</span>' + ss;
+        if (totalSec !== lastPlayed) {{
+            if (totalSec === b1 && !isMuted) bellSounds["1"].play().catch(e=>{{}});
+            if (totalSec === b2 && !isMuted) bellSounds["2"].play().catch(e=>{{}});
+            if (totalSec === b3) bellSounds["3"].play().catch(e=>{{}});
+            lastPlayed = totalSec;
+        }}
+    }}
+    function loop() {{ if (running) {{ elapsed = performance.now() - startTime; updateDisplay(); requestAnimationFrame(loop); }} }}
     updateDisplay();
 </script>
-</body>
-</html>
 """
 
-st.components.v1.html(final_content, height=850)
+st.components.v1.html(js_code, height=920)
