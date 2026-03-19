@@ -1,15 +1,16 @@
 # ==========================================
 # システム名：学会タイマーたけださん
-# バージョン：v7.2 Instructions Restored
-# 修正：「使い方」の説明文を元通りに復元
+# バージョン：v7.3 Debugged Edition
+# 修正：CSS内の波括弧による NameError を修正
 # ==========================================
 
 import streamlit as st
 
 st.set_page_config(page_title="学会タイマーたけださん", layout="wide", initial_sidebar_state="collapsed")
 
-st.markdown("""
-    <style>
+# 1. 共通CSSスタイルの定義（ここは変数展開しないので普通の文字列）
+common_style = """
+<style>
     .block-container {padding-top: 0.5rem; padding-left: 1rem; padding-right: 1rem;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
@@ -22,10 +23,20 @@ st.markdown("""
     .vol-container { display: flex; flex-direction: column; align-items: center; gap: 2px; }
     input[type=range] { width: 80px; cursor: pointer; }
     #vol-label { font-size: 0.7rem; color: #666; font-weight: bold; }
-    </style>
-    """, unsafe_allow_html=True)
+    
+    #main-wrapper { display: flex; flex-direction: column; align-items: center; font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; width: 100%; background: white; padding: 0 30px; box-sizing: border-box; }
+    .button-area { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }
+    .btn { border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 150px; transition: 0.1s; outline: none; }
+    .btn:active { transform: scale(0.92); filter: brightness(0.9); }
+    #footer-credit { margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; line-height: 1.6; }
+    #help-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: none; z-index: 9999; justify-content: center; align-items: center; }
+    #help-content { background: #fff; color: #333; padding: 30px; border-radius: 20px; max-width: 650px; width: 90%; position: relative; }
+    .close-btn { position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; color: #aaa; }
+</style>
+"""
+st.markdown(common_style, unsafe_allow_html=True)
 
-# 設定エリア
+# 2. 設定エリア（Python側）
 buf1, c1, c2, c3, c_test, buf2 = st.columns([1.5, 1, 1, 1, 1.8, 0.7])
 with c1:
     st.markdown('<div class="label-text">鈴1 (分)</div>', unsafe_allow_html=True)
@@ -38,7 +49,7 @@ with c3:
     b3_m = st.number_input("b3", value=10, step=1, key="b3", label_visibility="collapsed")
 
 with c_test:
-    st.markdown(f"""
+    st.markdown("""
     <div class="test-area">
         <div style="display:flex; gap:10px; align-items:center;">
             <div class="vol-container">
@@ -54,9 +65,10 @@ with c_test:
     </div>
     """, unsafe_allow_html=True)
 
+# 3. メインJavaScript & HTML（動的な値だけ f-string で埋め込み、他は {{ }} でエスケープ）
 b1_s, b2_s, b3_s = b1_m * 60, b2_m * 60, b3_m * 60
 
-js_code = f"""
+js_html_content = f"""
 <script>
     const B1_LIMIT = {b1_s}, B2_LIMIT = {b2_s}, B3_LIMIT = {b3_s};
     
@@ -180,17 +192,6 @@ js_code = f"""
     updateDisplay();
 </script>
 
-<style>
-    #main-wrapper { display: flex; flex-direction: column; align-items: center; font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; width: 100%; background: white; padding: 0 30px; box-sizing: border-box; }
-    .button-area { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }
-    .btn { border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 150px; transition: 0.1s; outline: none; }
-    .btn:active { transform: scale(0.92); filter: brightness(0.9); }
-    #footer-credit { margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; line-height: 1.6; }
-    #help-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: none; z-index: 9999; justify-content: center; align-items: center; }
-    #help-content { background: #fff; color: #333; padding: 30px; border-radius: 20px; max-width: 650px; width: 90%; position: relative; }
-    .close-btn { position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; color: #aaa; }
-</style>
-
 <div id="main-wrapper" onclick="unlockAudio()">
     <div id="progress-outer-container" style="width: 100%; height: 40px; background: #e0e0e0; border-radius: 20px; margin: 5px 0 10px 0; box-shadow: inset 0 3px 8px rgba(0,0,0,0.2); overflow: hidden; position: relative; display: flex; border: 1px solid #bbb;">
         <div id="bar-done" style="height:100%; width:0%; background: transparent; transition: width 0.1s linear;"></div>
@@ -216,7 +217,7 @@ js_code = f"""
         <button class="btn" style="background-color: #eee;" onclick="toggleHelp(true)">❓ 使い方</button>
     </div>
     <div id="footer-credit">
-        <div>学会タイマーたけださん v7.2</div>
+        <div>学会タイマーたけださん v7.3</div>
         <div>&copy; 2026 <b>Takeda Healthcare Foundation</b>. All Rights Reserved.</div>
     </div>
 </div>
@@ -239,5 +240,4 @@ js_code = f"""
     </div>
 </div>
 """
-
-st.components.v1.html(js_code, height=920)
+st.components.v1.html(js_html_content, height=920)
