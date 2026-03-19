@@ -1,7 +1,7 @@
 # ==========================================
 # システム名：学会タイマーたけださん
-# バージョン：v2.8 (SE共同開発・カウント切替/キーボード操作対応)
-# 作成日：2026年3月18日
+# バージョン：v2.8 Final (Web & Mobile Optimized)
+# 特徴：GitHub音源対応・レスポンシブ・物理ロック・キーボード操作
 # ==========================================
 
 import streamlit as st
@@ -45,7 +45,7 @@ st.markdown("""
     }
     </style>
     <div id="lock-overlay"></div>
-    <div class="meta-info" style="font-size: 0.7rem; color: #888; text-align: right;">v2.8 Final with Countdown</div>
+    <div class="meta-info" style="font-size: 0.7rem; color: #888; text-align: right;">v2.8 Final with Responsive UI</div>
     """, unsafe_allow_html=True)
 
 # --- 2. 設定エリア ---
@@ -63,37 +63,89 @@ with c3:
 
 # --- 3. JavaScriptによるメインロジック ---
 js_code = f"""
-<div id="timer-container" style="display: flex; flex-direction: column; justify-content: center; align-items: center;
-    height: 62vh; background-color: #007BFF; color: white; border-radius: 20px; font-family: sans-serif; transition: background-color 0.5s; margin-top: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-    <div id="status" style="font-size: 12vw; font-weight: 800; line-height: 1.0; margin-bottom: 2vh;">発表時間</div>
-    <div id="display" style="font-size: 15vw; font-weight: 900; line-height: 1.0;">00:00</div>
-</div>
+<style>
+    /* 全体コンテナ */
+    #main-wrapper {{
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        font-family: sans-serif;
+    }}
 
-<div style="margin-top: 25px; display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; align-items: center; font-family: sans-serif;">
-    <button onclick="playClick(); startTimer()" style="background-color: #87CEEB; border: none; padding: 15px 35px; font-size: 1.8rem; font-weight: bold; border-radius: 12px; cursor: pointer; box-shadow: 0 4px #6495ED;">▶ START</button>
-    <button onclick="playClick(); stopTimer()" style="background-color: #FFB6C1; border: none; padding: 15px 35px; font-size: 1.8rem; font-weight: bold; border-radius: 12px; cursor: pointer; box-shadow: 0 4px #DB7093;">|| STOP</button>
-    <button onclick="playClick(); resetTimer()" style="background-color: #98FB98; border: none; padding: 15px 35px; font-size: 1.8rem; font-weight: bold; border-radius: 12px; cursor: pointer; box-shadow: 0 4px #3CB371;">🔄 RESET</button>
-    
-    <button id="mode-btn" onclick="toggleMode()" style="background-color: #6C757D; color: white; border: none; padding: 15px 25px; font-size: 1.1rem; font-weight: bold; border-radius: 12px; cursor: pointer; box-shadow: 0 4px #5A6268; width: 220px;">
-        🔽 カウントダウンへ切替
-    </button>
-    
-    <button id="mute-btn" onclick="toggleMute()" style="background-color: #DC3545; color: white; border: none; padding: 15px 25px; font-size: 1.1rem; font-weight: bold; border-radius: 12px; cursor: pointer; box-shadow: 0 4px #A02030; width: 180px;">
-        1,2鈴ミュート
-    </button>
+    /* タイマー本体：スマホ・PC両対応 */
+    #timer-container {{
+        width: 100%;
+        height: 55vh; 
+        background-color: #007BFF; 
+        color: white; 
+        border-radius: 20px; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center; 
+        align-items: center; 
+        transition: background-color 0.5s; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }}
+
+    /* ボタンエリア：折り返し対応 */
+    .button-area {{
+        margin-top: 20px; 
+        display: flex; 
+        flex-wrap: wrap; 
+        gap: 12px; 
+        justify-content: center; 
+        width: 100%;
+    }}
+
+    /* ボタン共通スタイル */
+    .btn {{
+        border: none; 
+        padding: 15px 20px; 
+        font-size: 1.3rem; 
+        font-weight: bold; 
+        border-radius: 12px; 
+        cursor: pointer; 
+        min-width: 150px;
+        flex: 1 1 150px;
+        max-width: 280px;
+    }}
+
+    #status {{ font-size: 10vw; font-weight: 800; line-height: 1.0; margin-bottom: 2vh; }}
+    #display {{ font-size: 15vw; font-weight: 900; line-height: 1.0; }}
+
+    .btn-start {{ background-color: #87CEEB; box-shadow: 0 4px #6495ED; }}
+    .btn-stop {{ background-color: #FFB6C1; box-shadow: 0 4px #DB7093; }}
+    .btn-reset {{ background-color: #98FB98; box-shadow: 0 4px #3CB371; }}
+    .btn-mode {{ background-color: #6C757D; color: white; box-shadow: 0 4px #5A6268; }}
+    .btn-mute {{ background-color: #DC3545; color: white; box-shadow: 0 4px #A02030; }}
+</style>
+
+<div id="main-wrapper">
+    <div id="timer-container">
+        <div id="status">発表時間</div>
+        <div id="display">00:00</div>
+    </div>
+
+    <div class="button-area">
+        <button class="btn btn-start" onclick="playClick(); startTimer()">▶ START</button>
+        <button class="btn btn-stop" onclick="playClick(); stopTimer()">|| STOP</button>
+        <button class="btn btn-reset" onclick="playClick(); resetTimer()">🔄 RESET</button>
+        <button id="mode-btn" class="btn btn-mode" onclick="toggleMode()">🔽 カウントダウン</button>
+        <button id="mute-btn" class="btn btn-mute" onclick="toggleMute()">1,2鈴ミュート</button>
+    </div>
 </div>
 
 <script>
     let startTime = 0; let elapsed = 0; let running = false; let lastPlayed = -1; let isMuted = false;
-    let isCountdown = false; // モード管理
+    let isCountdown = false;
     
     const b1 = {b1_m * 60}; const b2 = {b2_m * 60}; const b3 = {b3_m * 60};
     
-    // SE様のpreload処理を採用
+    // GitHub音源URL（直リンク）
     const sounds = {{
-         "1": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/refs/heads/main/bell1.mp3"),
-         "2": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/refs/heads/main/bell2.mp3"),
-         "3": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/refs/heads/main/bell3.mp3")
+         "1": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell1.mp3"),
+         "2": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell2.mp3"),
+         "3": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell3.mp3")
     }};
     Object.values(sounds).forEach(s => {{ s.preload = "auto"; }});
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -131,9 +183,9 @@ js_code = f"""
         playClick(); isCountdown = !isCountdown;
         const btn = document.getElementById('mode-btn');
         if (isCountdown) {{
-            btn.style.backgroundColor = "#17A2B8"; btn.innerText = "🔼 カウントアップへ切替"; btn.style.boxShadow = "0 4px #117A8B";
+            btn.style.backgroundColor = "#17A2B8"; btn.innerText = "🔼 カウントアップ"; btn.style.boxShadow = "0 4px #117A8B";
         }} else {{
-            btn.style.backgroundColor = "#6C757D"; btn.innerText = "🔽 カウントダウンへ切替"; btn.style.boxShadow = "0 4px #5A6268";
+            btn.style.backgroundColor = "#6C757D"; btn.innerText = "🔽 カウントダウン"; btn.style.boxShadow = "0 4px #5A6268";
         }}
         updateDisplay();
     }}
@@ -144,19 +196,18 @@ js_code = f"""
         const container = document.getElementById('timer-container');
         const status = document.getElementById('status');
 
-        // 背景色と表示文言・計算ロジック
         if (totalSec < b2) {{ 
-            container.style.backgroundColor = "#007BFF"; // 青
-            status.innerText = isCountdown ? "発表残り時間" : "発表時間"; 
-            displaySec = isCountdown ? (b2 - totalSec) : totalSec; // カウントダウン時は引く
+            container.style.backgroundColor = "#007BFF";
+            status.innerText = isCountdown ? "残り時間" : "発表時間"; 
+            displaySec = isCountdown ? (b2 - totalSec) : totalSec;
         }}
         else if (totalSec < b3) {{ 
-            container.style.backgroundColor = "#D4A017"; // くすんだ黄色
+            container.style.backgroundColor = "#D4A017";
             status.innerText = "質疑応答"; 
-            displaySec = isCountdown ? (totalSec - b2) : totalSec; // 質疑からは0からカウントアップ
+            displaySec = isCountdown ? (totalSec - b2) : totalSec;
         }}
         else {{ 
-            container.style.backgroundColor = "#A52A2A"; // くすんだ赤
+            container.style.backgroundColor = "#A52A2A";
             status.innerText = "終了時間"; 
             displaySec = isCountdown ? (totalSec - b2) : totalSec;
         }}
@@ -165,16 +216,14 @@ js_code = f"""
         const ss = String(displaySec % 60).padStart(2, '0');
         document.getElementById('display').innerText = mm + ":" + ss;
 
-        // 鈴の制御（内部時間は常に進むため、条件は統一でOK）
         if (totalSec !== lastPlayed) {{
-            if (totalSec === b1 && !isMuted) sounds["1"].play().catch(e => {{}});
-            if (totalSec === b2 && !isMuted) sounds["2"].play().catch(e => {{}});
-            if (totalSec === b3) sounds["3"].play().catch(e => {{}});
+            if (totalSec === b1 && !isMuted) {{ sounds["1"].currentTime = 0; sounds["1"].play().catch(e => {{}}); }}
+            if (totalSec === b2 && !isMuted) {{ sounds["2"].currentTime = 0; sounds["2"].play().catch(e => {{}}); }}
+            if (totalSec === b3) {{ sounds["3"].currentTime = 0; sounds["3"].play().catch(e => {{}}); }}
             lastPlayed = totalSec;
         }}
     }}
 
-    // SE様提案の requestAnimationFrame ループ
     function loop() {{
         if (!running) return;
         elapsed = performance.now() - startTime;
@@ -186,7 +235,7 @@ js_code = f"""
         if (!running) {{ 
             running = true; setPhysicalLock(true);
             startTime = performance.now() - elapsed;
-            requestAnimationFrame(loop); // setIntervalから変更
+            requestAnimationFrame(loop);
         }}
     }}
     
@@ -194,10 +243,9 @@ js_code = f"""
     
     function resetTimer() {{
         running = false; setPhysicalLock(false); elapsed = 0; lastPlayed = -1;
-        updateDisplay(); // モードは維持したままリセット
+        updateDisplay();
     }}
 
-    // SE様提案のキーボードショートカット
     document.addEventListener("keydown", (e) => {{
         if (e.code === "Space") {{ playClick(); startTimer(); e.preventDefault(); }}
         if (e.code === "KeyS") {{ playClick(); stopTimer(); }}
@@ -208,4 +256,4 @@ js_code = f"""
 </script>
 """
 
-st.components.v1.html(js_code, height=950)
+st.components.v1.html(js_code, height=900)
