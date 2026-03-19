@@ -1,8 +1,8 @@
 # ==========================================
 # システム名：学会タイマーたけださん
-# バージョン：v3.2 Final (MP3 Edition)
-# 特徴：GitHub音源対応・iPhoneアンロック機能・クレジット表記
-# Created by Takeda Health Foundation
+# バージョン：v5.3 Compact Container Edition
+# 特徴：フォントサイズ維持・コンテナ縦幅短縮（52vh）
+# Created by Takeda Healthcare Foundation
 # 2026/3/19  
 # ==========================================
 
@@ -11,47 +11,19 @@ import streamlit as st
 # --- 1. ページ設定 ---
 st.set_page_config(page_title="学会タイマーたけださん", layout="wide", initial_sidebar_state="collapsed")
 
-# クレジットとカスタムCSS
 st.markdown("""
     <style>
     .block-container {padding-top: 0.5rem; padding-left: 1rem; padding-right: 1rem;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
-    
-    /* 左上のクレジット表記 */
-    .credit {
-        position: absolute;
-        top: 0;
-        left: 0;
-        font-size: 0.7rem;
-        color: #aaaaaa;
-        font-family: sans-serif;
-    }
-
-    .label-text {
-        font-size: 1.1rem; font-weight: bold; color: #333; 
-        margin-bottom: 2px; text-align: center;
-    }
-
-    input[type="number"] {
-        font-size: 2.5rem !important; font-weight: 900 !important;
-        text-align: center !important; height: 60px !important; color: #000 !important;
-    }
-
-    div[data-testid="stNumberInput"] { max-width: 140px; margin: 0 auto; }
-
-    #lock-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 180px; 
-        z-index: 999999; display: none; cursor: not-allowed;
-    }
+    input[type="number"] { font-size: 2.2rem !important; font-weight: 700 !important; text-align: center !important; }
+    .label-text { font-size: 1.1rem; font-weight: bold; color: #333; text-align: center; }
+    div[data-testid="stNumberInput"] { max-width: 130px; margin: 0 auto; }
     </style>
-    <div class="credit">Created by Takeda Healthcare Foundation</div>
-    <div id="lock-overlay"></div>
     """, unsafe_allow_html=True)
 
 # --- 2. 設定エリア ---
 buf1, c1, c2, c3, buf2 = st.columns([1.5, 1, 1, 1, 2.5])
-
 with c1:
     st.markdown('<div class="label-text">鈴1 (分)</div>', unsafe_allow_html=True)
     b1_m = st.number_input("b1", value=6, step=1, label_visibility="collapsed")
@@ -62,154 +34,164 @@ with c3:
     st.markdown('<div class="label-text">鈴3 (分)</div>', unsafe_allow_html=True)
     b3_m = st.number_input("b3", value=10, step=1, label_visibility="collapsed")
 
-# --- 3. JavaScriptによるメインロジック ---
+b1_s, b2_s, b3_s = b1_m * 60, b2_m * 60, b3_m * 60
+
+# --- 3. メインアプリ表示 ---
 js_code = f"""
 <style>
-    #main-wrapper {{ display: flex; flex-direction: column; align-items: center; font-family: sans-serif; }}
-    #timer-container {{
-        width: 100%; height: 50vh; background-color: #007BFF; color: white; 
-        border-radius: 20px; display: flex; flex-direction: column; 
-        justify-content: center; align-items: center; transition: background-color 0.5s; 
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    #main-wrapper {{ display: flex; flex-direction: column; align-items: center; font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; width: 100%; background: white; }}
+    
+    #progress-outer-container {{
+        width: 100%; height: 40px; background: #e0e0e0; border-radius: 20px;
+        margin: 5px 0 10px 0; box-shadow: inset 0 3px 8px rgba(0,0,0,0.2);
+        overflow: hidden; position: relative; display: flex; border: 1px solid #bbb;
     }}
-    .button-area {{ margin-top: 15px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 100%; }}
-    .btn {{
-        border: none; padding: 12px 15px; font-size: 1.2rem; font-weight: bold; 
-        border-radius: 12px; cursor: pointer; flex: 1 1 130px; max-width: 220px;
+    .liquid-segment {{ height: 100%; transition: width 0.1s linear; }}
+    #bar-empty {{ width: 0%; background: transparent; }}
+    #bar-blue {{ background: linear-gradient(to bottom, #4facfe 0%, #007BFF 50%, #0056b3 100%); }}
+    #bar-yellow {{ background: linear-gradient(to bottom, #fff3b0 0%, #FFD700 50%, #b89b00 100%); }}
+    #bar-red {{ position: absolute; top:0; left:0; height:100%; width:0%; z-index:1; background: linear-gradient(to bottom, #ffcccc 0%, #FF0000 50%, #b30000 100%); transition: width 0.3s; }}
+    #progress-marks {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }}
+    #progress-highlight {{ position: absolute; top: 2px; left: 10px; right: 10px; height: 35%; background: linear-gradient(to bottom, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 100%); border-radius: 20px; filter: blur(1px); z-index: 3; pointer-events: none; }}
+    
+    #timer-container {{ 
+        width: 100%; 
+        height: 52vh; /* 縦幅を62vhから52vhへ短縮。これが青い四角の高さです。 */
+        background-color: #007BFF; color: white; border-radius: 25px; 
+        display: flex; flex-direction: column; justify-content: center; align-items: center; 
+        box-shadow: 0 6px 20px rgba(0,0,0,0.15); 
+        padding-top: 1vh; padding-bottom: 1vh;
     }}
-    #status {{ font-size: 8vw; font-weight: 800; line-height: 1.0; margin-bottom: 2vh; }}
-    #display {{ font-size: 15vw; font-weight: 900; line-height: 1.0; }}
+    
+    #status {{ font-size: 9vw; font-weight: 700; line-height: 0.8; margin-bottom: 1.5vw; opacity: 0.95; }}
+    #display {{ 
+        font-size: 14vw; /* フォントサイズはそのまま維持 */
+        font-weight: 700; 
+        line-height: 0.8; 
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.02em;
+    }}
+    .colon {{ vertical-align: middle; position: relative; top: -0.05em; }}
 
-    .btn-start {{ background-color: #87CEEB; box-shadow: 0 4px #6495ED; }}
-    .btn-stop {{ background-color: #FFB6C1; box-shadow: 0 4px #DB7093; }}
-    .btn-reset {{ background-color: #98FB98; box-shadow: 0 4px #3CB371; }}
-    .btn-mode {{ background-color: #6C757D; color: white; }}
-    .btn-mute {{ background-color: #DC3545; color: white; }}
+    .button-area {{ margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }}
+    .btn {{ border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 150px; transition: 0.2s; }}
+    .btn:active {{ transform: scale(0.95); }}
+
+    #footer-credit {{ margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; }}
+
+    #help-modal {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: none; z-index: 9999; justify-content: center; align-items: center; }}
+    #help-content {{ background: #fff; color: #333; padding: 30px; border-radius: 20px; max-width: 600px; width: 90%; position: relative; }}
+    .close-btn {{ position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; color: #aaa; }}
 </style>
 
 <div id="main-wrapper">
+    <div id="progress-outer-container">
+        <div id="bar-empty" class="liquid-segment"></div>
+        <div id="bar-blue" class="liquid-segment"></div>
+        <div id="bar-yellow" class="liquid-segment"></div>
+        <div id="bar-red"></div>
+        <div id="progress-marks"></div>
+        <div id="progress-highlight"></div>
+    </div>
     <div id="timer-container">
         <div id="status">発表時間</div>
-        <div id="display">00:00</div>
+        <div id="display">00<span class="colon">:</span>00</div>
     </div>
     <div class="button-area">
-        <button class="btn btn-start" onclick="handleAction('start')">▶ START</button>
-        <button class="btn btn-stop" onclick="handleAction('stop')">|| STOP</button>
-        <button class="btn btn-reset" onclick="handleAction('reset')">🔄 RESET</button>
-        <button id="mode-btn" class="btn btn-mode" onclick="handleAction('mode')">🔽 カウントダウン</button>
-        <button id="mute-btn" class="btn btn-mute" onclick="handleAction('mute')">1,2鈴ミュート</button>
+        <button class="btn" style="background-color: #87CEEB;" onclick="handleAction('start')">▶ START</button>
+        <button class="btn" style="background-color: #FFB6C1;" onclick="handleAction('stop')">|| STOP</button>
+        <button class="btn" style="background-color: #98FB98;" onclick="handleAction('reset')">🔄 RESET</button>
+        <button id="mode-btn" class="btn" style="background-color: #6C757D; color: white;" onclick="handleAction('mode')">🔽 表示切替</button>
+        <button id="mute-btn" class="btn" style="background-color: #E1F5FE; border: 1px solid #007BFF; color: #007BFF;" onclick="handleAction('mute')">🔔 鈴1,2：有効</button>
+        <button class="btn" style="background-color: #343a40; color: white;" onclick="toggleFullscreen()">🔳 全画面</button>
+        <button class="btn" style="background-color: #eee;" onclick="toggleHelp(true)">❓ 使い方</button>
+    </div>
+    <div id="footer-credit">
+        <div>&copy; 2026 <b>Takeda Healthcare Foundation</b>. All Rights Reserved.</div>
+    </div>
+</div>
+
+<div id="help-modal">
+    <div id="help-content">
+        <span class="close-btn" onclick="toggleHelp(false)">×</span>
+        <h3 style="color:#007BFF; border-bottom:2px solid #007BFF;">💡 学会タイマーたけださんの使い方</h3>
+        <ul style="font-size:0.9rem; line-height:1.7;">
+            <li><b>START / STOP / RESET:</b> タイマーの基本操作。</li>
+            <li><b>表示切替:</b> 残り／経過時間を切り替えます。</li>
+            <li><b>鈴1,2：有効／消音中:</b> 特定の鈴を消音できます。</li>
+            <li><b>全画面:</b> 投影用にブラウザ枠を消します。</li>
+            <li><b>進捗バー:</b> 1分目盛り付き。液体の減少で残り時間を表示。</li>
+        </ul>
     </div>
 </div>
 
 <script>
     let startTime = 0; let elapsed = 0; let running = false; let lastPlayed = -1; 
-    let isMuted = false; let isCountdown = false; let audioUnlocked = false;
-    
-    const b1 = {b1_m * 60}; const b2 = {b2_m * 60}; const b3 = {b3_m * 60};
-    
-    // GitHub音源
-    const sounds = {{
-         "1": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell1.mp3"),
-         "2": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell2.mp3"),
-         "3": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell3.mp3")
-    }};
+    let isCountdown = false; let isMuted = false; let audioUnlocked = false;
+    const b1 = {b1_s}, b2 = {b2_s}, b3 = {b3_s};
+    const sounds = {{ "1": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell1.mp3"), "2": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell2.mp3"), "3": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell3.mp3") }};
 
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    let audioCtx = null;
+    function toggleHelp(show) {{ document.getElementById('help-modal').style.display = show ? 'flex' : 'none'; }}
+    window.onclick = function(event) {{ if (event.target == document.getElementById('help-modal')) toggleHelp(false); }}
 
-    // iPhone用アンロック: 最初のクリックで全ファイルを「空再生」して許可を得る
-    function unlockAudio() {{
-        if (audioUnlocked) return;
-        Object.values(sounds).forEach(s => {{
-            s.play().then(() => {{ s.pause(); s.currentTime = 0; }}).catch(e => {{}});
-        }});
-        if (!audioCtx) audioCtx = new AudioContext();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        audioUnlocked = true;
-    }}
-
-    function playClick() {{
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+    function toggleFullscreen() {{
+        let elem = document.getElementById("main-wrapper");
+        if (!document.fullscreenElement) elem.requestFullscreen().catch(e => {{ alert(e.message); }});
+        else document.exitFullscreen();
     }}
 
     function handleAction(type) {{
-        unlockAudio(); // 全ボタンでアンロックを試みる
-        if (type === 'start') {{ playClick(); startTimer(); }}
-        if (type === 'stop') {{ playClick(); stopTimer(); }}
-        if (type === 'reset') {{ playClick(); resetTimer(); }}
-        if (type === 'mode') {{ playClick(); toggleMode(); }}
-        if (type === 'mute') {{ playClick(); toggleMute(); }}
-    }}
-
-    function toggleMute() {{
-        isMuted = !isMuted;
-        const btn = document.getElementById('mute-btn');
-        btn.style.backgroundColor = isMuted ? "#CCCCCC" : "#DC3545";
-        btn.innerText = isMuted ? "1,2鈴 消音中" : "1,2鈴ミュート";
-    }}
-
-    function toggleMode() {{
-        isCountdown = !isCountdown;
-        const btn = document.getElementById('mode-btn');
-        btn.innerText = isCountdown ? "🔼 カウントアップ" : "🔽 カウントダウン";
-        updateDisplay();
+        if (!audioUnlocked) {{ Object.values(sounds).forEach(s => {{ s.play().then(()=>{{s.pause(); s.currentTime=0;}}).catch(e=>{{}}); }}); audioUnlocked = true; }}
+        if (type === 'start' && !running) {{ running = true; startTime = performance.now() - elapsed; requestAnimationFrame(loop); }}
+        if (type === 'stop') {{ running = false; }}
+        if (type === 'reset') {{ running = false; elapsed = 0; lastPlayed = -1; updateDisplay(); }}
+        if (type === 'mode') {{ isCountdown = !isCountdown; updateDisplay(); }}
+        if (type === 'mute') {{ 
+            isMuted = !isMuted; 
+            const mbtn = document.getElementById('mute-btn');
+            if (isMuted) {{
+                mbtn.innerHTML = `<span style="color:#888;">🔔</span><span style="color:#ff4b4b;font-weight:900;margin-left:-5px;">✕</span> 鈴1,2：消音中`;
+                mbtn.style.backgroundColor = "#f5f5f5"; mbtn.style.color = "#999"; mbtn.style.border = "1px solid #ddd";
+            }} else {{
+                mbtn.innerHTML = "🔔 鈴1,2：有効";
+                mbtn.style.backgroundColor = "#E1F5FE"; mbtn.style.color = "#007BFF"; mbtn.style.border = "1px solid #007BFF";
+            }}
+        }}
     }}
 
     function updateDisplay() {{
         const totalSec = Math.floor(elapsed / 1000);
         let displaySec = 0;
-        const container = document.getElementById('timer-container');
-        const status = document.getElementById('status');
+        const container = document.getElementById('timer-container'), status = document.getElementById('status'), displayEl = document.getElementById('display');
+        const barEmpty = document.getElementById('bar-empty'), barBlue = document.getElementById('bar-blue'), barYellow = document.getElementById('bar-yellow'), barRed = document.getElementById('bar-red');
 
-        if (totalSec < b2) {{ 
-            container.style.backgroundColor = "#007BFF";
-            status.innerText = isCountdown ? "残り時間" : "発表時間"; 
-            displaySec = isCountdown ? (b2 - totalSec) : totalSec;
-        }} else if (totalSec < b3) {{ 
-            container.style.backgroundColor = "#D4A017";
-            status.innerText = "質疑応答"; 
-            displaySec = isCountdown ? (totalSec - b2) : totalSec;
-        }} else {{ 
-            container.style.backgroundColor = "#A52A2A";
-            status.innerText = "終了時間"; 
-            displaySec = isCountdown ? (totalSec - b2) : totalSec;
+        const minPct = 100 / (b3 / 60);
+        document.getElementById('progress-marks').style.background = `repeating-linear-gradient(to right, transparent 0, transparent calc(${{minPct}}% - 1px), rgba(0,0,0,0.1) calc(${{minPct}}% - 1px), rgba(0,0,0,0.1) ${{minPct}}%)`;
+
+        if (totalSec < b2) {{
+            container.style.backgroundColor = "#007BFF"; status.innerText = isCountdown ? "残り時間" : "発表時間"; displaySec = isCountdown ? (b2 - totalSec) : totalSec;
+            barEmpty.style.width = (totalSec / b3 * 100) + "%"; barBlue.style.width = ((b2 - totalSec) / b3 * 100) + "%"; barYellow.style.width = ((b3 - b2) / b3 * 100) + "%"; barRed.style.width = "0%";
+        }} else if (totalSec < b3) {{
+            container.style.backgroundColor = "#D4A017"; status.innerText = "質疑応答"; displaySec = isCountdown ? (totalSec - b2) : totalSec;
+            barEmpty.style.width = (totalSec / b3 * 100) + "%"; barBlue.style.width = "0%"; barYellow.style.width = ((b3 - totalSec) / b3 * 100) + "%"; barRed.style.width = "0%";
+        }} else {{
+            container.style.backgroundColor = "#A52A2A"; status.innerText = "終了時間"; displaySec = isCountdown ? (totalSec - b2) : totalSec;
+            barRed.style.width = "100%";
         }}
 
-        const mm = String(Math.floor(displaySec / 60)).padStart(2, '0');
-        const ss = String(displaySec % 60).padStart(2, '0');
-        document.getElementById('display').innerText = mm + ":" + ss;
+        const mm = String(Math.floor(displaySec / 60)).padStart(2, '0'), ss = String(displaySec % 60).padStart(2, '0');
+        displayEl.innerHTML = mm + '<span class="colon">:</span>' + ss;
 
         if (totalSec !== lastPlayed) {{
-            if (totalSec === b1 && !isMuted) {{ sounds["1"].currentTime = 0; sounds["1"].play().catch(e=>{{}}); }}
-            if (totalSec === b2 && !isMuted) {{ sounds["2"].currentTime = 0; sounds["2"].play().catch(e=>{{}}); }}
-            if (totalSec === b3) {{ sounds["3"].currentTime = 0; sounds["3"].play().catch(e=>{{}}); }}
+            if (totalSec === b1 && !isMuted) sounds["1"].play().catch(e=>{{}});
+            if (totalSec === b2 && !isMuted) sounds["2"].play().catch(e=>{{}});
+            if (totalSec === b3) sounds["3"].play().catch(e=>{{}});
             lastPlayed = totalSec;
         }}
     }}
-
-    function loop() {{
-        if (!running) return;
-        elapsed = performance.now() - startTime;
-        updateDisplay();
-        requestAnimationFrame(loop);
-    }}
-
-    function startTimer() {{
-        if (!running) {{ 
-            running = true; startTime = performance.now() - elapsed;
-            requestAnimationFrame(loop);
-        }}
-    }}
-    function stopTimer() {{ running = false; }}
-    function resetTimer() {{ running = false; elapsed = 0; lastPlayed = -1; updateDisplay(); }}
-
+    function loop() {{ if (running) {{ elapsed = performance.now() - startTime; updateDisplay(); requestAnimationFrame(loop); }} }}
     updateDisplay();
 </script>
 """
 
-st.components.v1.html(js_code, height=850)
+st.components.v1.html(js_code, height=920)
