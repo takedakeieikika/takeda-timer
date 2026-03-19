@@ -91,9 +91,9 @@ js_code = f"""
     
     // SE様のpreload処理を採用
     const sounds = {{
-        "1": new Audio("https://www.takedakenko.jp/bell1.mp3"),
-        "2": new Audio("https://www.takedakenko.jp/bell2.mp3"),
-        "3": new Audio("https://www.takedakenko.jp/bell3.mp3")
+         "1": new Audio("bell1.mp3"),
+         "2": new Audio("bell2.mp3"),
+         "3": new Audio("bell3.mp3")
     }};
     Object.values(sounds).forEach(s => {{ s.preload = "auto"; }});
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
