@@ -1,10 +1,8 @@
 # ==========================================
 # システム名：学会タイマーたけださん
-# バージョン：v6.1 Final Stable Edition
-# 修正：クレジットエリアにシステム名とバージョンを追加
-# 方式：クリック音(Web Audio合成) / ベル音(GitHub mp3)
-# Created by Takeda Healthcare Foundation
-# 2026/3/19  
+# バージョン：v7.3 Full Feature Edition
+# 修正：使い方ボタン(モーダル)とクレジット表示を復活。
+#       テストボタンのクリック音なし、設定保存機能も継続。
 # ==========================================
 
 import streamlit as st
@@ -13,81 +11,65 @@ st.set_page_config(page_title="学会タイマーたけださん", layout="wide"
 
 st.markdown("""
     <style>
-    .block-container {padding-top: 0.5rem; padding-left: 1rem; padding-right: 1rem;}
+    .block-container {padding: 0 !important;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
-    input[type="number"] { font-size: 2.2rem !important; font-weight: 700 !important; text-align: center !important; }
-    .label-text { font-size: 1.1rem; font-weight: bold; color: #333; text-align: center; }
-    div[data-testid="stNumberInput"] { max-width: 130px; margin: 0 auto; }
+    iframe {border: none;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- 設定エリア ---
-buf1, c1, c2, c3, buf2 = st.columns([1.5, 1, 1, 1, 2.5])
-with c1:
-    st.markdown('<div class="label-text">鈴1 (分)</div>', unsafe_allow_html=True)
-    b1_m = st.number_input("b1", value=6, step=1, key="b1", label_visibility="collapsed")
-with c2:
-    st.markdown('<div class="label-text">鈴2 (分)</div>', unsafe_allow_html=True)
-    b2_m = st.number_input("b2", value=7, step=1, key="b2", label_visibility="collapsed")
-with c3:
-    st.markdown('<div class="label-text">鈴3 (分)</div>', unsafe_allow_html=True)
-    b3_m = st.number_input("b3", value=10, step=1, key="b3", label_visibility="collapsed")
+html_code = """
+<div id="app-container">
+    <div class="config-bar">
+        <div class="input-group">
+            <span class="label">鈴1(分)</span>
+            <input type="number" id="m1" value="6" min="0" onchange="saveSettings()">
+        </div>
+        <div class="input-group">
+            <span class="label">鈴2(分)</span>
+            <input type="number" id="m2" value="7" min="0" onchange="saveSettings()">
+        </div>
+        <div class="input-group">
+            <span class="label">鈴3(分)</span>
+            <input type="number" id="m3" value="10" min="0" onchange="saveSettings()">
+        </div>
+        
+        <div class="vol-section">
+            <div id="vol-label">鈴音量: 80%</div>
+            <input type="range" id="vol-slider" min="0" max="100" value="80">
+        </div>
+        
+        <div class="test-bell-group">
+            <button onclick="testBell(1)">🔔1</button>
+            <button onclick="testBell(2)">🔔2</button>
+            <button onclick="testBell(3)">🔔3</button>
+        </div>
+    </div>
 
-b1_s, b2_s, b3_s = b1_m * 60, b2_m * 60, b3_m * 60
-
-js_code = f"""
-<style>
-    #main-wrapper {{ display: flex; flex-direction: column; align-items: center; font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; width: 100%; background: white; }}
-    #progress-outer-container {{ width: 100%; height: 40px; background: #e0e0e0; border-radius: 20px; margin: 5px 0 10px 0; box-shadow: inset 0 3px 8px rgba(0,0,0,0.2); overflow: hidden; position: relative; display: flex; border: 1px solid #bbb; }}
-    .liquid-segment {{ height: 100%; transition: width 0.1s linear; }}
-    #bar-empty {{ width: 0%; background: transparent; }}
-    #bar-blue {{ background: linear-gradient(to bottom, #4facfe 0%, #007BFF 50%, #0056b3 100%); }}
-    #bar-yellow {{ background: linear-gradient(to bottom, #fff3b0 0%, #FFD700 50%, #b89b00 100%); }}
-    #bar-red {{ position: absolute; top:0; left:0; height:100%; width:0%; z-index:1; background: linear-gradient(to bottom, #ffcccc 0%, #FF0000 50%, #b30000 100%); transition: width 0.3s; }}
-    #progress-marks {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }}
-    #progress-highlight {{ position: absolute; top: 2px; left: 10px; right: 10px; height: 35%; background: linear-gradient(to bottom, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 100%); border-radius: 20px; filter: blur(1px); z-index: 3; pointer-events: none; }}
-    
-    #timer-container {{ width: 100%; height: 52vh; background-color: #007BFF; color: white; border-radius: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,0.15); padding-top: 1vh; padding-bottom: 1vh; }}
-    #status {{ font-size: 9vw; font-weight: 700; line-height: 0.8; margin-bottom: 1.5vw; opacity: 0.95; }}
-    #display {{ font-size: 14vw; font-weight: 700; line-height: 0.8; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }}
-    .colon {{ vertical-align: middle; position: relative; top: -0.05em; }}
-    
-    .button-area {{ margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }}
-    .btn {{ border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 150px; transition: 0.1s; outline: none; }}
-    .btn:active {{ transform: scale(0.92); filter: brightness(0.9); }}
-    
-    #footer-credit {{ margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; line-height: 1.6; }}
-
-    #help-modal {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: none; z-index: 9999; justify-content: center; align-items: center; }}
-    #help-content {{ background: #fff; color: #333; padding: 30px; border-radius: 20px; max-width: 650px; width: 90%; position: relative; }}
-    .close-btn {{ position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; color: #aaa; }}
-</style>
-
-<div id="main-wrapper" onclick="unlockAudio()">
-    <div id="progress-outer-container">
-        <div id="bar-empty" class="liquid-segment"></div>
-        <div id="bar-blue" class="liquid-segment"></div>
-        <div id="bar-yellow" class="liquid-segment"></div>
-        <div id="bar-red"></div>
+    <div id="progress-container">
+        <div id="bar-blue" class="bar"></div>
+        <div id="bar-yellow" class="bar"></div>
+        <div id="bar-red" class="bar"></div>
         <div id="progress-marks"></div>
-        <div id="progress-highlight"></div>
     </div>
-    <div id="timer-container">
-        <div id="status">発表時間</div>
-        <div id="display">00<span class="colon">:</span>00</div>
+
+    <div id="timer-panel">
+        <div id="status-text">発表時間</div>
+        <div id="time-display">00:00</div>
     </div>
-    <div class="button-area">
-        <button class="btn" style="background-color: #87CEEB;" onclick="handleAction('start')">▶ START</button>
-        <button class="btn" style="background-color: #FFB6C1;" onclick="handleAction('stop')">|| STOP</button>
-        <button class="btn" style="background-color: #98FB98;" onclick="handleAction('reset')">🔄 RESET</button>
-        <button class="btn" style="background-color: #6C757D; color: white;" onclick="handleAction('mode')">🔽 表示切替</button>
-        <button id="mute-btn" class="btn" style="background-color: #E1F5FE; border: 1px solid #007BFF; color: #007BFF;" onclick="handleAction('mute')">🔔 鈴1,2：有効</button>
-        <button class="btn" style="background-color: #343a40; color: white;" onclick="toggleFullscreen()">🔳 全画面</button>
-        <button class="btn" style="background-color: #eee;" onclick="toggleHelp(true)">❓ 使い方</button>
+
+    <div class="controls">
+        <button class="btn btn-start" onclick="handleAction('start')">▶ START (Space)</button>
+        <button class="btn btn-stop" onclick="handleAction('stop')">|| STOP</button>
+        <button class="btn btn-reset" onclick="handleAction('reset')">🔄 RESET (R)</button>
+        <button class="btn btn-mode" onclick="handleAction('mode')">表示切替</button>
+        <button id="mute-btn" class="btn btn-mute" onclick="handleAction('mute')">🔔 鈴1,2：有効 (M)</button>
+        <button class="btn btn-fs" onclick="toggleFS()">🔳 全画面</button>
+        <button class="btn btn-help" onclick="toggleHelp(true)">❓ 使い方</button>
     </div>
+
     <div id="footer-credit">
-        <div>学会タイマーたけださん v6.1</div>
+        <div>学会タイマーたけださん v7.3</div>
         <div>&copy; 2026 <b>Takeda Healthcare Foundation</b>. All Rights Reserved.</div>
     </div>
 </div>
@@ -95,101 +77,171 @@ js_code = f"""
 <div id="help-modal">
     <div id="help-content">
         <span class="close-btn" onclick="toggleHelp(false)">×</span>
-        <h3 style="color:#007BFF; border-bottom:2px solid #007BFF; margin-top:0; padding-bottom:5px;">💡 学会タイマーたけださんの使い方</h3>
-        <div style="font-size:0.95rem; line-height:1.8; color:#333; text-align:left;">
-            <p style="margin: 15px 0;">〇発表時間設定：鈴１回（発表終了１分前）、鈴２回（発表終了時間）、鈴３回（質疑終了）の各分数を設定できます。</p>
-            <p style="margin: 15px 0;">〇表示切替：発表経過時間（カウントアップ）と発表残り時間（カウントダウン）の表示を切り替えます。</p>
-            <p style="margin: 15px 0;">〇鈴１，２ミュートボタン：鈴１回と鈴２回を消音できます。</p>
+        <h3 style="color:#007BFF; border-bottom:2px solid #007BFF; margin:0 0 15px 0; padding-bottom:5px;">💡 使い方</h3>
+        <div style="font-size:0.9rem; line-height:1.6; text-align:left; color:#333;">
+            <p><b>⌨️ ショートカット:</b><br>
+               ・[Space] 開始/停止<br>
+               ・[R] リセット / [M] 消音切替</p>
+            <p><b>〇時間設定:</b> 数値を変更すると自動保存されます。</p>
+            <p><b>〇音量:</b> スライダーで調整。テストボタンは操作音なしで確認できます。</p>
         </div>
     </div>
 </div>
 
+<style>
+    :root { --blue: #007BFF; --yellow: #D4A017; --red: #A52A2A; }
+    body { margin: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background: #fff; overflow: hidden; }
+    #app-container { display: flex; flex-direction: column; align-items: center; padding: 10px 20px; box-sizing: border-box; width: 100vw; }
+    
+    .config-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; padding: 5px; border-bottom: 1px solid #eee; width: 100%; justify-content: center; }
+    .input-group input { width: 60px; font-size: 1.3rem; text-align: center; font-weight: bold; border: 1px solid #ccc; border-radius: 5px; }
+    .vol-section { display: flex; flex-direction: column; align-items: center; border-left: 1px solid #ddd; padding-left: 12px; }
+    
+    #progress-container { width: 100%; height: 32px; background: #eee; border-radius: 16px; position: relative; overflow: hidden; border: 1px solid #bbb; margin-bottom: 8px; display: flex; }
+    .bar { height: 100%; transition: width 0.1s linear; }
+    #bar-blue { background: linear-gradient(to bottom, #4facfe, #007BFF); }
+    #bar-yellow { background: linear-gradient(to bottom, #fff3b0, #FFD700); }
+    #bar-red { position: absolute; left: 0; top: 0; background: linear-gradient(to bottom, #ffcccc, #FF0000); width: 0%; z-index: 2; }
+    
+    #timer-panel { width: 100%; height: 52vh; background: var(--blue); color: white; border-radius: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    #status-text { font-size: 7vw; font-weight: bold; }
+    #time-display { font-size: 14vw; font-weight: bold; font-variant-numeric: tabular-nums; }
+    
+    .controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; width: 100%; justify-content: center; }
+    .btn { border: none; padding: 10px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.8rem; flex: 1 1 100px; max-width: 140px; }
+    .btn-start { background: #87CEEB; }
+    .btn-stop { background: #FFB6C1; }
+    .btn-reset { background: #98FB98; }
+    .btn-mode { background: #6C757D; color: white; }
+    .btn-mute { background: #E1F5FE; color: var(--blue); border: 1px solid var(--blue); }
+    .btn-help { background: #f0f0f0; }
+    .btn-fs { background: #333; color: white; }
+
+    #footer-credit { margin-top: 15px; text-align: center; color: #aaa; font-size: 0.75rem; border-top: 1px solid #eee; padding-top: 8px; width: 80%; }
+    
+    /* モーダルCSS */
+    #help-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; z-index: 1000; justify-content: center; align-items: center; }
+    #help-content { background: #fff; padding: 25px; border-radius: 15px; width: 85%; max-width: 450px; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+    .close-btn { position: absolute; top: 10px; right: 15px; font-size: 1.4rem; cursor: pointer; color: #999; }
+</style>
+
 <script>
-    let startTime = 0, elapsed = 0, running = false, lastPlayed = -1, isCountdown = false, isMuted = false, audioCtx = null;
-    const b1 = {b1_s}, b2 = {b2_s}, b3 = {b3_s};
-    const bellSounds = {{
-        "1": new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell1.mp3"),
-        "2": new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell2.mp3"),
-        "3": new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell3.mp3")
-    }};
+    let running = false, startTime = 0, elapsed = 0, lastSec = -1, isCountdown = false, isMuted = false, audioCtx = null;
+    let currentVol = parseFloat(localStorage.getItem("takeda_vol")) || 0.8;
 
-    function unlockAudio() {{
-        if (!audioCtx) {{
+    const bells = {
+        1: new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell1.mp3"),
+        2: new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell2.mp3"),
+        3: new Audio("https://raw.githubusercontent.com/takedakeieikika/takeda-timer/main/bell3.mp3")
+    };
+
+    window.onload = () => {
+        document.getElementById('m1').value = localStorage.getItem("takeda_m1") || 6;
+        document.getElementById('m2').value = localStorage.getItem("takeda_m2") || 7;
+        document.getElementById('m3').value = localStorage.getItem("takeda_m3") || 10;
+        const s = document.getElementById('vol-slider');
+        s.value = currentVol * 100;
+        document.getElementById('vol-label').innerText = "鈴音量: " + s.value + "%";
+        update();
+    };
+
+    function saveSettings() {
+        localStorage.setItem("takeda_m1", document.getElementById('m1').value);
+        localStorage.setItem("takeda_m2", document.getElementById('m2').value);
+        localStorage.setItem("takeda_m3", document.getElementById('m3').value);
+        update();
+    }
+
+    document.getElementById('vol-slider').oninput = function() {
+        currentVol = this.value / 100;
+        document.getElementById('vol-label').innerText = "鈴音量: " + this.value + "%";
+        localStorage.setItem("takeda_vol", currentVol);
+        Object.values(bells).forEach(b => b.volume = currentVol);
+    };
+
+    function unlock() {
+        if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            Object.values(bellSounds).forEach(s => {{ s.play().then(()=>{{s.pause(); s.currentTime=0;}}).catch(e=>{{}}); }});
-        }}
+            Object.values(bells).forEach(b => { b.volume = currentVol; b.load(); });
+        }
         if (audioCtx.state === 'suspended') audioCtx.resume();
-    }}
+    }
 
-    function synthClick() {{
-        if (!audioCtx) return;
-        const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-        osc.type = 'sine'; osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.05);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.05);
-    }}
+    function click() {
+        if(!audioCtx) return;
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type='sine'; o.frequency.setValueAtTime(1200, audioCtx.currentTime);
+        g.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime + 0.05);
+    }
 
-    function toggleHelp(show) {{ synthClick(); document.getElementById('help-modal').style.display = show ? 'flex' : 'none'; }}
+    window.testBell = (n) => { unlock(); bells[n].currentTime=0; bells[n].play().catch(e=>{}); };
+    window.toggleHelp = (show) => { click(); document.getElementById('help-modal').style.display = show ? 'flex' : 'none'; };
 
-    function handleAction(type) {{
-        unlockAudio(); synthClick();
-        if (type === 'start' && !running) {{ running = true; startTime = performance.now() - elapsed; requestAnimationFrame(loop); }}
+    window.handleAction = (type) => {
+        unlock(); click();
+        if (type === 'start' && !running) { running = true; startTime = performance.now() - elapsed; requestAnimationFrame(loop); }
         if (type === 'stop') running = false;
-        if (type === 'reset') {{ running = false; elapsed = 0; lastPlayed = -1; updateDisplay(); }}
-        if (type === 'mode') {{ isCountdown = !isCountdown; updateDisplay(); }}
-        if (type === 'mute') {{ 
-            isMuted = !isMuted; const mbtn = document.getElementById('mute-btn');
-            mbtn.innerHTML = isMuted ? '<span style="color:#ff4b4b;">✕</span> 鈴1,2：消音中' : '🔔 鈴1,2：有効';
-            mbtn.style.backgroundColor = isMuted ? "#f5f5f5" : "#E1F5FE";
-        }}
-    }}
+        if (type === 'reset') { running = false; elapsed = 0; lastSec = -1; update(); }
+        if (type === 'mode') { isCountdown = !isCountdown; update(); }
+        if (type === 'mute') {
+            isMuted = !isMuted;
+            document.getElementById('mute-btn').innerHTML = isMuted ? '<span style="color:red">✕</span> 消音中' : '🔔 鈴1,2：有効 (M)';
+        }
+    };
 
-    function toggleFullscreen() {{
-        synthClick(); let elem = document.getElementById("main-wrapper");
-        if (!document.fullscreenElement) elem.requestFullscreen().catch(e => {{}});
+    function toggleFS() {
+        click();
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(e=>{});
         else document.exitFullscreen();
-    }}
+    }
 
-    function updateDisplay() {{
-        const totalSec = Math.floor(elapsed / 1000);
-        let displaySec = 0;
-        const container = document.getElementById('timer-container'), status = document.getElementById('status'), displayEl = document.getElementById('display');
-        const barEmpty = document.getElementById('bar-empty'), barBlue = document.getElementById('bar-blue'), barYellow = document.getElementById('bar-yellow'), barRed = document.getElementById('bar-red');
+    function update() {
+        const b1 = (document.getElementById('m1').value || 0) * 60;
+        const b2 = (document.getElementById('m2').value || 0) * 60;
+        const b3 = (document.getElementById('m3').value || 0) * 60;
+        const sec = Math.floor(elapsed / 1000);
+        let disp = isCountdown ? (sec < b2 ? b2 - sec : sec - b2) : sec;
         
-        const minPct = 100 / (b3 / 60);
-        document.getElementById('progress-marks').style.background = `repeating-linear-gradient(to right, transparent 0, transparent calc(${{minPct}}% - 1px), rgba(0,0,0,0.1) calc(${{minPct}}% - 1px), rgba(0,0,0,0.1) ${{minPct}}%)`;
+        const panel = document.getElementById('timer-panel'), stat = document.getElementById('status-text');
+        const bBlue = document.getElementById('bar-blue'), bYellow = document.getElementById('bar-yellow'), bRed = document.getElementById('bar-red');
 
-        if (totalSec < b2) {{
-            container.style.backgroundColor = "#007BFF"; status.innerText = isCountdown ? "残り時間" : "発表時間"; displaySec = isCountdown ? (b2 - totalSec) : totalSec;
-            barEmpty.style.width = (totalSec / b3 * 100) + "%";
-            barBlue.style.width = ((b2 - totalSec) / b3 * 100) + "%";
-            barYellow.style.width = ((b3 - b2) / b3 * 100) + "%";
-            barRed.style.width = "0%";
-        }} else if (totalSec < b3) {{
-            container.style.backgroundColor = "#D4A017"; status.innerText = "質疑応答"; displaySec = isCountdown ? (totalSec - b2) : totalSec;
-            barEmpty.style.width = (totalSec / b3 * 100) + "%";
-            barBlue.style.width = "0%";
-            barYellow.style.width = ((b3 - totalSec) / b3 * 100) + "%";
-            barRed.style.width = "0%";
-        }} else {{
-            container.style.backgroundColor = "#A52A2A"; status.innerText = "終了時間"; displaySec = isCountdown ? (totalSec - b2) : totalSec;
-            barRed.style.width = "100%";
-        }}
-        const mm = String(Math.floor(displaySec / 60)).padStart(2, '0'), ss = String(displaySec % 60).padStart(2, '0');
-        displayEl.innerHTML = mm + '<span class="colon">:</span>' + ss;
-        if (totalSec !== lastPlayed) {{
-            if (totalSec === b1 && !isMuted) bellSounds["1"].play().catch(e=>{{}});
-            if (totalSec === b2 && !isMuted) bellSounds["2"].play().catch(e=>{{}});
-            if (totalSec === b3) bellSounds["3"].play().catch(e=>{{}});
-            lastPlayed = totalSec;
-        }}
-    }}
-    function loop() {{ if (running) {{ elapsed = performance.now() - startTime; updateDisplay(); requestAnimationFrame(loop); }} }}
-    updateDisplay();
+        const step = 100 / (b3 / 60 || 1);
+        document.getElementById('progress-marks').style.background = `repeating-linear-gradient(to right, transparent 0, transparent calc(${step}% - 1px), rgba(0,0,0,0.1) calc(${step}% - 1px), rgba(0,0,0,0.1) ${step}%)`;
+
+        if (sec < b2) {
+            panel.style.background = 'var(--blue)'; stat.innerText = isCountdown ? "残り時間" : "発表時間";
+            bBlue.style.width = ((b2 - sec) / b3 * 100) + "%"; bYellow.style.width = ((b3 - b2) / b3 * 100) + "%"; bRed.style.width = "0%";
+        } else if (sec < b3) {
+            panel.style.background = 'var(--yellow)'; stat.innerText = "質疑応答";
+            bBlue.style.width = "0%"; bYellow.style.width = ((b3 - sec) / b3 * 100) + "%"; bRed.style.width = "0%";
+        } else {
+            panel.style.background = 'var(--red)'; stat.innerText = "終了時間";
+            bRed.style.width = "100%";
+        }
+
+        const mm = String(Math.floor(disp / 60)).padStart(2, '0'), ss = String(disp % 60).padStart(2, '0');
+        document.getElementById('time-display').innerText = mm + ":" + ss;
+
+        if (sec !== lastSec) {
+            if (sec === b1 && !isMuted) bells[1].play().catch(e=>{});
+            if (sec === b2 && !isMuted) bells[2].play().catch(e=>{});
+            if (sec === b3) bells[3].play().catch(e=>{});
+            lastSec = sec;
+        }
+    }
+
+    function loop() { if (running) { elapsed = performance.now() - startTime; update(); requestAnimationFrame(loop); } }
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        if (e.code === "Space") { e.preventDefault(); handleAction(running ? 'stop' : 'start'); }
+        if (e.key.toLowerCase() === "r") handleAction('reset');
+        if (e.key.toLowerCase() === "m") handleAction('mute');
+    });
+    update();
 </script>
 """
 
-st.components.v1.html(js_code, height=920)
+st.components.v1.html(html_code, height=920, scrolling=False)
