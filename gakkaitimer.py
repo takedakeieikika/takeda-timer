@@ -91,9 +91,9 @@ js_code = f"""
     
     // SE様のpreload処理を採用
     const sounds = {{
-         "1": new Audio("https://raw.githubusercontent.com/あなたのGitHubユーザー名/takeda-timer/main/bell1.mp3"),
-         "2": new Audio("https://raw.githubusercontent.com/あなたのGitHubユーザー名/takeda-timer/main/bell2.mp3"),
-         "3": new Audio("https://raw.githubusercontent.com/あなたのGitHubユーザー名/takeda-timer/main/bell3.mp3")
+         "1": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/refs/heads/main/bell1.mp3"),
+         "2": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/refs/heads/main/bell2.mp3"),
+         "3": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/refs/heads/main/bell3.mp3"")
     }};
     Object.values(sounds).forEach(s => {{ s.preload = "auto"; }});
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
