@@ -1,7 +1,7 @@
 # ==========================================
 # システム名：学会タイマーたけださん
-# バージョン：v5.8 Full Restoration Edition
-# 修正：使い方ボタン・クレジットの再実装
+# バージョン：v6.0 Official Release
+# 修正：使い方の説明文を指定通りに固定
 # 方式：クリック音(Web Audio合成) / ベル音(GitHub mp3)
 # Created by Takeda Healthcare Foundation
 # 2026/3/19  
@@ -60,7 +60,7 @@ js_code = f"""
     #footer-credit {{ margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; }}
 
     #help-modal {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: none; z-index: 9999; justify-content: center; align-items: center; }}
-    #help-content {{ background: #fff; color: #333; padding: 30px; border-radius: 20px; max-width: 600px; width: 90%; position: relative; }}
+    #help-content {{ background: #fff; color: #333; padding: 30px; border-radius: 20px; max-width: 650px; width: 90%; position: relative; }}
     .close-btn {{ position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; color: #aaa; }}
 </style>
 
@@ -94,13 +94,12 @@ js_code = f"""
 <div id="help-modal">
     <div id="help-content">
         <span class="close-btn" onclick="toggleHelp(false)">×</span>
-        <h3 style="color:#007BFF; border-bottom:2px solid #007BFF;">💡 学会タイマーたけださんの使い方</h3>
-        <ul style="font-size:0.9rem; line-height:1.7; color:#444;">
-            <li><b>操作音:</b> ボタンを押すと内部合成音が鳴ります。</li>
-            <li><b>解禁:</b> 起動後、画面のどこかを一度クリックすると音が有効になります。</li>
-            <li><b>全画面:</b> プレゼン投影時にブラウザの枠を隠せます。</li>
-            <li><b>進捗バー:</b> 1分ごとの目盛り付きで直感的に残り時間を把握。</li>
-        </ul>
+        <h3 style="color:#007BFF; border-bottom:2px solid #007BFF; margin-top:0; padding-bottom:5px;">💡 学会タイマーたけださんの使い方</h3>
+        <div style="font-size:0.95rem; line-height:1.8; color:#333; text-align:left;">
+            <p style="margin: 15px 0;">〇発表時間設定：鈴１回（発表終了１分前）、鈴２回（発表終了時間）、鈴３回（質疑終了）の各分数を設定できます。</p>
+            <p style="margin: 15px 0;">〇表示切替：発表経過時間（カウントアップ）と発表残り時間（カウントダウン）の表示を切り替えます。</p>
+            <p style="margin: 15px 0;">〇鈴１，２ミュートボタン：鈴１回と鈴２回を消音できます。</p>
+        </div>
     </div>
 </div>
 
