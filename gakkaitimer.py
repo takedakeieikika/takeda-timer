@@ -1,7 +1,7 @@
 # ==========================================
 # システム名：学会タイマーたけださん
-# バージョン：v5.3 Compact Container Edition
-# 特徴：フォントサイズ維持・コンテナ縦幅短縮（52vh）
+# バージョン：v5.4 Click Sound Edition
+# 特徴：操作時のクリック音を追加・レイアウト維持
 # Created by Takeda Healthcare Foundation
 # 2026/3/19  
 # ==========================================
@@ -55,8 +55,7 @@ js_code = f"""
     #progress-highlight {{ position: absolute; top: 2px; left: 10px; right: 10px; height: 35%; background: linear-gradient(to bottom, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 100%); border-radius: 20px; filter: blur(1px); z-index: 3; pointer-events: none; }}
     
     #timer-container {{ 
-        width: 100%; 
-        height: 52vh; /* 縦幅を62vhから52vhへ短縮。これが青い四角の高さです。 */
+        width: 100%; height: 52vh; 
         background-color: #007BFF; color: white; border-radius: 25px; 
         display: flex; flex-direction: column; justify-content: center; align-items: center; 
         box-shadow: 0 6px 20px rgba(0,0,0,0.15); 
@@ -64,18 +63,12 @@ js_code = f"""
     }}
     
     #status {{ font-size: 9vw; font-weight: 700; line-height: 0.8; margin-bottom: 1.5vw; opacity: 0.95; }}
-    #display {{ 
-        font-size: 14vw; /* フォントサイズはそのまま維持 */
-        font-weight: 700; 
-        line-height: 0.8; 
-        font-variant-numeric: tabular-nums;
-        letter-spacing: -0.02em;
-    }}
+    #display {{ font-size: 14vw; font-weight: 700; line-height: 0.8; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }}
     .colon {{ vertical-align: middle; position: relative; top: -0.05em; }}
 
     .button-area {{ margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }}
-    .btn {{ border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 150px; transition: 0.2s; }}
-    .btn:active {{ transform: scale(0.95); }}
+    .btn {{ border: none; padding: 12px; font-size: 0.9rem; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1 1 110px; max-width: 150px; transition: 0.1s; }}
+    .btn:active {{ transform: scale(0.92); filter: brightness(0.9); }}
 
     #footer-credit {{ margin-top: 25px; text-align: center; color: #aaa; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 10px; width: 85%; }}
 
@@ -116,11 +109,8 @@ js_code = f"""
         <span class="close-btn" onclick="toggleHelp(false)">×</span>
         <h3 style="color:#007BFF; border-bottom:2px solid #007BFF;">💡 学会タイマーたけださんの使い方</h3>
         <ul style="font-size:0.9rem; line-height:1.7;">
-            <li><b>START / STOP / RESET:</b> タイマーの基本操作。</li>
-            <li><b>表示切替:</b> 残り／経過時間を切り替えます。</li>
-            <li><b>鈴1,2：有効／消音中:</b> 特定の鈴を消音できます。</li>
-            <li><b>全画面:</b> 投影用にブラウザ枠を消します。</li>
-            <li><b>進捗バー:</b> 1分目盛り付き。液体の減少で残り時間を表示。</li>
+            <li>ボタンを押すと操作音（クリック音）が鳴ります。</li>
+            <li>ブラウザの制限により、最初の1回目のクリックで音が有効になります。</li>
         </ul>
     </div>
 </div>
@@ -129,19 +119,46 @@ js_code = f"""
     let startTime = 0; let elapsed = 0; let running = false; let lastPlayed = -1; 
     let isCountdown = false; let isMuted = false; let audioUnlocked = false;
     const b1 = {b1_s}, b2 = {b2_s}, b3 = {b3_s};
-    const sounds = {{ "1": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell1.mp3"), "2": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell2.mp3"), "3": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell3.mp3") }};
+    
+    // ベルの音
+    const sounds = {{ 
+        "1": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell1.mp3"), 
+        "2": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell2.mp3"), 
+        "3": new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/bell3.mp3") 
+    }};
+    
+    // クリック音（短く清潔感のある音を採用）
+    const clickSound = new Audio("https://github.com/takedakeieikika/takeda-timer/raw/main/click.mp3");
 
-    function toggleHelp(show) {{ document.getElementById('help-modal').style.display = show ? 'flex' : 'none'; }}
-    window.onclick = function(event) {{ if (event.target == document.getElementById('help-modal')) toggleHelp(false); }}
+    function toggleHelp(show) {{ 
+        playClick();
+        document.getElementById('help-modal').style.display = show ? 'flex' : 'none'; 
+    }}
+
+    function playClick() {{
+        if (audioUnlocked) {{
+            clickSound.currentTime = 0;
+            clickSound.play().catch(e=>{{}});
+        }}
+    }}
 
     function toggleFullscreen() {{
+        playClick();
         let elem = document.getElementById("main-wrapper");
         if (!document.fullscreenElement) elem.requestFullscreen().catch(e => {{ alert(e.message); }});
         else document.exitFullscreen();
     }}
 
     function handleAction(type) {{
-        if (!audioUnlocked) {{ Object.values(sounds).forEach(s => {{ s.play().then(()=>{{s.pause(); s.currentTime=0;}}).catch(e=>{{}}); }}); audioUnlocked = true; }}
+        // 初回クリック時にすべてのオーディオをアンロック
+        if (!audioUnlocked) {{ 
+            Object.values(sounds).forEach(s => {{ s.play().then(()=>{{s.pause(); s.currentTime=0;}}).catch(e=>{{}}); }}); 
+            clickSound.play().then(()=>{{clickSound.pause(); clickSound.currentTime=0;}}).catch(e=>{{}});
+            audioUnlocked = true; 
+        }}
+        
+        playClick();
+
         if (type === 'start' && !running) {{ running = true; startTime = performance.now() - elapsed; requestAnimationFrame(loop); }}
         if (type === 'stop') {{ running = false; }}
         if (type === 'reset') {{ running = false; elapsed = 0; lastPlayed = -1; updateDisplay(); }}
