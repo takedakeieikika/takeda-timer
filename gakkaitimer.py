@@ -1,10 +1,9 @@
 # ==========================================
 # システム名：学会タイマーたけださん
-# バージョン：v6.1 Final Stable Edition
-# 修正：クレジットエリアにシステム名とバージョンを追加
-# 方式：クリック音(Web Audio合成) / ベル音(GitHub mp3)
+# バージョン：v6.1 Final Stable Edition (Custom)
+# 修正：操作音削除 / ベル表記統一 / テストボタン追加
 # Created by Takeda Healthcare Foundation
-# 2026/3/19  
+# 2026/3/21
 # ==========================================
 
 import streamlit as st
@@ -23,16 +22,16 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 設定エリア（＋/－ボタン付き入力窓）
+# 2. 設定エリア（ラベルを「ベル」に変更）
 buf1, c1, c2, c3, buf2 = st.columns([1.5, 1, 1, 1, 2.5])
 with c1:
-    st.markdown('<div class="label-text">鈴1 (分)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="label-text">ベル1 (分)</div>', unsafe_allow_html=True)
     b1_m = st.number_input("b1", value=6, step=1, key="b1", label_visibility="collapsed")
 with c2:
-    st.markdown('<div class="label-text">鈴2 (分)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="label-text">ベル2 (分)</div>', unsafe_allow_html=True)
     b2_m = st.number_input("b2", value=7, step=1, key="b2", label_visibility="collapsed")
 with c3:
-    st.markdown('<div class="label-text">鈴3 (分)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="label-text">ベル3 (分)</div>', unsafe_allow_html=True)
     b3_m = st.number_input("b3", value=10, step=1, key="b3", label_visibility="collapsed")
 
 b1_s, b2_s, b3_s = b1_m * 60, b2_m * 60, b3_m * 60
@@ -84,7 +83,8 @@ js_code = f"""
         <button class="btn" style="background-color: #FFB6C1;" onclick="handleAction('stop')">|| STOP</button>
         <button class="btn" style="background-color: #98FB98;" onclick="handleAction('reset')">🔄 RESET</button>
         <button class="btn" style="background-color: #6C757D; color: white;" onclick="handleAction('mode')">🔽 表示切替</button>
-        <button id="mute-btn" class="btn" style="background-color: #E1F5FE; border: 1px solid #007BFF; color: #007BFF;" onclick="handleAction('mute')">🔔 鈴1,2：有効</button>
+        <button id="mute-btn" class="btn" style="background-color: #E1F5FE; border: 1px solid #007BFF; color: #007BFF;" onclick="handleAction('mute')">🔔 ベル1,2：有効</button>
+        <button class="btn" style="background-color: #FFF9C4; border: 1px solid #FBC02D; color: #917200;" onclick="playTest()">🔔 ベル音テスト</button>
         <button class="btn" style="background-color: #343a40; color: white;" onclick="toggleFullscreen()">🔳 全画面</button>
         <button class="btn" style="background-color: #eee;" onclick="toggleHelp(true)">❓ 使い方</button>
     </div>
@@ -99,9 +99,9 @@ js_code = f"""
         <span class="close-btn" onclick="toggleHelp(false)">×</span>
         <h3 style="color:#007BFF; border-bottom:2px solid #007BFF; margin-top:0; padding-bottom:5px;">💡 学会タイマーたけださんの使い方</h3>
         <div style="font-size:0.95rem; line-height:1.8; color:#333; text-align:left;">
-            <p style="margin: 15px 0;">〇発表時間設定：鈴１回（発表終了１分前）、鈴２回（発表終了時間）、鈴３回（質疑終了）の各分数を設定できます。</p>
+            <p style="margin: 15px 0;">〇発表時間設定：ベル１回（発表終了１分前）、ベル２回（発表終了時間）、ベル３回（質疑終了）の各分数を設定できます。</p>
             <p style="margin: 15px 0;">〇表示切替：発表経過時間（カウントアップ）と発表残り時間（カウントダウン）の表示を切り替えます。</p>
-            <p style="margin: 15px 0;">〇鈴１，２ミュートボタン：鈴１回と鈴２回を消音できます。</p>
+            <p style="margin: 15px 0;">〇ベル１，２ミュートボタン：ベル１回とベル２回を消音できます。</p>
         </div>
     </div>
 </div>
@@ -123,34 +123,25 @@ js_code = f"""
         if (audioCtx.state === 'suspended') audioCtx.resume();
     }}
 
-    function synthClick() {{
-        if (!audioCtx) return;
-        const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-        osc.type = 'sine'; osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.05);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.05);
-    }}
+    function playTest() {{ unlockAudio(); bellSounds["1"].currentTime = 0; bellSounds["1"].play().catch(e=>{{}}); }}
 
-    function toggleHelp(show) {{ synthClick(); document.getElementById('help-modal').style.display = show ? 'flex' : 'none'; }}
+    function toggleHelp(show) {{ document.getElementById('help-modal').style.display = show ? 'flex' : 'none'; }}
 
     function handleAction(type) {{
-        unlockAudio(); synthClick();
+        unlockAudio();
         if (type === 'start' && !running) {{ running = true; startTime = performance.now() - elapsed; requestAnimationFrame(loop); }}
         if (type === 'stop') running = false;
         if (type === 'reset') {{ running = false; elapsed = 0; lastPlayed = -1; updateDisplay(); }}
         if (type === 'mode') {{ isCountdown = !isCountdown; updateDisplay(); }}
         if (type === 'mute') {{ 
             isMuted = !isMuted; const mbtn = document.getElementById('mute-btn');
-            mbtn.innerHTML = isMuted ? '<span style="color:#ff4b4b;">✕</span> 鈴1,2：消音中' : '🔔 鈴1,2：有効';
+            mbtn.innerHTML = isMuted ? '<span style="color:#ff4b4b;">✕</span> ベル1,2：消音中' : '🔔 ベル1,2：有効';
             mbtn.style.backgroundColor = isMuted ? "#f5f5f5" : "#E1F5FE";
         }}
     }}
 
     function toggleFullscreen() {{
-        synthClick(); let elem = document.getElementById("main-wrapper");
+        let elem = document.getElementById("main-wrapper");
         if (!document.fullscreenElement) elem.requestFullscreen().catch(e => {{}});
         else document.exitFullscreen();
     }}
