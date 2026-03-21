@@ -1,7 +1,7 @@
 # ==========================================
 # システム名：学会タイマーたけださん
-# バージョン：v6.1 Final Stable Edition (Custom)
-# 修正：操作音削除 / ベル表記統一 / テストボタン追加
+# バージョン：v6.1 Final Stable Edition (Customized)
+# 修正：操作音削除 / ベル表記統一 / テストボタン追加 / RESET連動ミュート解除
 # Created by Takeda Healthcare Foundation
 # 2026/3/21
 # ==========================================
@@ -22,7 +22,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 設定エリア（ラベルを「ベル」に変更）
+# 2. 設定エリア
 buf1, c1, c2, c3, buf2 = st.columns([1.5, 1, 1, 1, 2.5])
 with c1:
     st.markdown('<div class="label-text">ベル1 (分)</div>', unsafe_allow_html=True)
@@ -101,7 +101,7 @@ js_code = f"""
         <div style="font-size:0.95rem; line-height:1.8; color:#333; text-align:left;">
             <p style="margin: 15px 0;">〇発表時間設定：ベル１回（発表終了１分前）、ベル２回（発表終了時間）、ベル３回（質疑終了）の各分数を設定できます。</p>
             <p style="margin: 15px 0;">〇表示切替：発表経過時間（カウントアップ）と発表残り時間（カウントダウン）の表示を切り替えます。</p>
-            <p style="margin: 15px 0;">〇ベル１，２ミュートボタン：ベル１回とベル２回を消音できます。</p>
+            <p style="margin: 15px 0;">〇ベル１，２ミュートボタン：ベル１回とベル２回を消音できます。※RESETボタンを押すと自動的に「有効」に戻ります。</p>
         </div>
     </div>
 </div>
@@ -127,16 +127,28 @@ js_code = f"""
 
     function toggleHelp(show) {{ document.getElementById('help-modal').style.display = show ? 'flex' : 'none'; }}
 
+    function updateMuteButtonUI() {{
+        const mbtn = document.getElementById('mute-btn');
+        mbtn.innerHTML = isMuted ? '<span style="color:#ff4b4b;">✕</span> ベル1,2：消音中' : '🔔 ベル1,2：有効';
+        mbtn.style.backgroundColor = isMuted ? "#f5f5f5" : "#E1F5FE";
+    }}
+
     function handleAction(type) {{
         unlockAudio();
         if (type === 'start' && !running) {{ running = true; startTime = performance.now() - elapsed; requestAnimationFrame(loop); }}
         if (type === 'stop') running = false;
-        if (type === 'reset') {{ running = false; elapsed = 0; lastPlayed = -1; updateDisplay(); }}
+        if (type === 'reset') {{ 
+            running = false; 
+            elapsed = 0; 
+            lastPlayed = -1; 
+            isMuted = false; // ミュートを解除（有効に戻す）
+            updateMuteButtonUI(); 
+            updateDisplay(); 
+        }}
         if (type === 'mode') {{ isCountdown = !isCountdown; updateDisplay(); }}
         if (type === 'mute') {{ 
-            isMuted = !isMuted; const mbtn = document.getElementById('mute-btn');
-            mbtn.innerHTML = isMuted ? '<span style="color:#ff4b4b;">✕</span> ベル1,2：消音中' : '🔔 ベル1,2：有効';
-            mbtn.style.backgroundColor = isMuted ? "#f5f5f5" : "#E1F5FE";
+            isMuted = !isMuted; 
+            updateMuteButtonUI();
         }}
     }}
 
