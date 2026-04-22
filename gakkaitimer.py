@@ -49,7 +49,7 @@ js_code = f"""
     #progress-marks {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }}
     #progress-highlight {{ position: absolute; top: 2px; left: 10px; right: 10px; height: 35%; background: linear-gradient(to bottom, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 100%); border-radius: 20px; filter: blur(1px); z-index: 3; pointer-events: none; }}
     
-    #timer-container {{ width: 100%; height: 52vh; background-color: #007BFF; color: white; border-radius: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,0.15); padding-top: 1vh; padding-bottom: 1vh; }}
+    #timer-container {{ width: 100%; height: 52vh;  color: white; border-radius: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,0.15); padding-top: 1vh; padding-bottom: 1vh;  background-color: #28a745; }}
     #status {{ font-size: 9vw; font-weight: 700; line-height: 0.8; margin-bottom: 1.5vw; opacity: 0.95; }}
     #display {{ font-size: 14vw; font-weight: 700; line-height: 0.8; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }}
     .colon {{ vertical-align: middle; position: relative; top: -0.05em; }}
@@ -75,7 +75,7 @@ js_code = f"""
         <div id="progress-highlight"></div>
     </div>
     <div id="timer-container">
-        <div id="status">発表時間</div>
+        <div id="status">スタンバイ</div>
         <div id="display">00<span class="colon">:</span>00</div>
     </div>
     <div class="button-area">
@@ -135,7 +135,7 @@ js_code = f"""
 
     function handleAction(type) {{
         unlockAudio();
-        if (type === 'start' && !running) {{ running = true; startTime = performance.now() - elapsed; requestAnimationFrame(loop); }}
+        if (type === 'start' && !running) {{ running = true; startTime = performance.now() - elapsed; updateDisplay(); requestAnimationFrame(loop); }}
         if (type === 'stop') running = false;
         if (type === 'reset') {{ 
             running = false; 
@@ -163,6 +163,21 @@ js_code = f"""
         let displaySec = 0;
         const container = document.getElementById('timer-container'), status = document.getElementById('status'), displayEl = document.getElementById('display');
         const barEmpty = document.getElementById('bar-empty'), barBlue = document.getElementById('bar-blue'), barYellow = document.getElementById('bar-yellow'), barRed = document.getElementById('bar-red');
+
+        // ===== スタンバイ状態（起動時・RESET直後）=====
+        if (!running && elapsed === 0) {{
+            container.style.backgroundColor = "#28a745"; // 緑
+            status.innerText = "スタンバイ";
+
+            barEmpty.style.width  = "0%";
+            barBlue.style.width   = (b2 / b3 * 100) + "%";
+            barYellow.style.width = ((b3 - b2) / b3 * 100) + "%";
+            barRed.style.width    = "0%";
+
+            displayEl.innerHTML = '00<span class="colon">:</span>00';
+            return;
+        }}
+
         
         const minPct = 100 / (b3 / 60);
         document.getElementById('progress-marks').style.background = `repeating-linear-gradient(to right, transparent 0, transparent calc(${{minPct}}% - 1px), rgba(0,0,0,0.1) calc(${{minPct}}% - 1px), rgba(0,0,0,0.1) ${{minPct}}%)`;
